@@ -1,123 +1,54 @@
 import numpy as np
-import torch
-import torchvision.transforms as transforms
-from torch.utils.data import Dataset
-from PIL import Image
-import os
+import dataloaders.transforms as transforms
+from dataloaders.dataloader import MyDataloader
 
-train_transforms = transforms.Compose([transforms.ToPILImage(),
-                                       transforms.ColorJitter(
-                                           brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
-                                       transforms.ToTensor()
-                                       ])
-valid_transforms = transforms.Compose([transforms.ToTensor()])
-depth_transforms = transforms.Compose([transforms.ToTensor()])
+iheight, iwidth = 480, 640 # raw image size
 
+def make_dataset(root, txt):
+    with open(txt, 'r') as f:
+        List = []
+        for line in f:
+            List.append(line.strip('\n'))
+    return List
 
-def RandomFlipLeftRight(image, depth, mode):
-    if mode == 'train':
-        rand_var = np.random.random()
-        image = image[:, ::-1, :] if rand_var > 0.5 else image
-        depth = depth[:, ::-1] if rand_var > 0.5 else depth
-    return image, depth
-
-
-def RandomRotation(image, depth, degree, mode):
-    if mode == 'train':
-        image = Image.fromarray(image)
-        depth = Image.fromarray(depth)
-        random_angel = np.random.randint(-degree, degree)
-        image = image.rotate(random_angel, resample=Image.BICUBIC)
-        depth = depth.rotate(random_angel, resample=Image.NEAREST)
-        image = np.array(image)
-        depth = np.array(depth)
-        return image, depth
-    else:
-        return image, depth
-
-
-def ResizeAndCrop(image, depth, r_height, r_width, c_height, c_width, mode):
-    image = Image.fromarray(image)
-    depth = Image.fromarray(depth)
-    image = image.resize((r_width, r_height), resample=Image.BICUBIC)
-    depth = depth.resize((r_width, r_height), resample=Image.NEAREST)
-    if mode == 'train':
-        # random scale
-        #s = 1 + 0.5 * np.random.rand()
-        s = 1
-        s_width, s_height = int(r_width * s), int(r_height * s)
-        #image = image.resize((s_width, s_height), resample=Image.BICUBIC)
-        #depth = depth.resize((s_width, s_height), resample=Image.NEAREST)
-        # random crop
-        left = np.random.randint(0, s_width - c_width)
-        up = np.random.randint(0, s_height - c_height)
-    else:  # center crop
-        left = (r_width - c_width) // 2
-        up = (r_height - c_height) // 2
-    region = (left, up, left + c_width, up + c_height)
-    image = image.crop(region)
-    depth = depth.crop(region)
-    image = np.array(image)
-    depth = np.array(depth)
-    return image, depth
-
-
-class NyuFromTxt(Dataset):
-    def __init__(self, home_image, home_depth, image_txt, depth_txt,
-                 original_height, original_width,
-                 resize_height, resize_width,
-                 crop_height, crop_width,
+class NYUDataset(MyDataloader):
+    def __init__(self, root_image, root_depth, 
+                 image_txt, depth_txt, 
                  min_depth, max_depth,
-                 mode='train'
-                 ):
-        super(NyuFromTxt, self).__init__()
-        with open(image_txt, 'r') as f:
-            images_list = []
-            for line in f:
-                line = line.strip('\n')
-                images_list.append(line)
-        self.images_list = images_list
-        with open(depth_txt, 'r') as f:
-            depths_list = []
-            for line in f:
-                line = line.strip('\n')
-                depths_list.append(line)
-        self.depths_list = depths_list
-        self.home_image = home_image
-        self.home_depth = home_depth
-        self.mode = mode
-        self.o_height, self.o_width = original_height, original_width
-        self.r_height, self.r_width = resize_height, resize_width
-        self.c_height, self.c_width = crop_height, crop_width
-        self.min_depth = torch.tensor(min_depth)
-        self.max_depth = torch.tensor(max_depth)
-        # self.crop = [13, -16, 16, -18]  # up, down, left, right
+                 mode='train', make=make_dataset):
+        super(NYUDataset, self).__init__(root_image, root_depth, image_txt, depth_txt, min_depth, max_depth, mode, make)
+        self.output_size = (224, 304)
 
-    def load_img(self, path, is_image=True):
-        if is_image:
-            img = np.array(Image.open(path).convert('RGB'))
-        else:
-            img = np.array(Image.open(path))
-            img = np.float32(img) / 256
-        return img
+    def train_transform(self, rgb, depth):
+        s = np.random.uniform(1.0, 1.5) # random scaling
+        depth_np = depth / s
+        angle = np.random.uniform(-5.0, 5.0) # random rotation degrees
+        do_flip = np.random.uniform(0.0, 1.0) < 0.5 # random horizontal flip
 
-    def __getitem__(self, index):
-        image_path = os.path.join(self.home_image, self.images_list[index])
-        depth_path = os.path.join(self.home_depth, self.depths_list[index])
-        image = self.load_img(image_path, is_image=True)
-        depth = self.load_img(depth_path, is_image=False)
-        image, depth = RandomFlipLeftRight(image, depth, self.mode)
-        image, depth = ResizeAndCrop(
-            image, depth, self.r_height, self.r_width, self.c_height, self.c_width, self.mode)
-        #image, depth = RandomRotation(image, depth, 5, self.mode)
-        depth = np.clip(depth, a_min=0, a_max=self.max_depth.item())
-        depth = np.expand_dims(depth, -1)
-        if self.mode == 'train':
-            image = train_transforms(image)
-        else:
-            image = valid_transforms(image)
-        depth = depth_transforms(depth)
-        return image, depth
+        # perform 1st step of data augmentation
+        transform = transforms.Compose([
+            transforms.Resize(240.0 / iheight), # this is for computational efficiency, since rotation can be slow
+            transforms.Rotate(angle),
+            transforms.Resize(s),
+            transforms.RandomCrop(self.output_size),
+            transforms.HorizontalFlip(do_flip)
+        ])
+        rgb_np = transform(rgb)
+        color_jitter = transforms.ColorJitter(0.4, 0.4, 0.4)
+        rgb_np = color_jitter(rgb_np) # random color jittering
+        rgb_np = np.asfarray(rgb_np, dtype='float') / 255
+        depth_np = transform(depth_np)
 
-    def __len__(self):
-        return len(self.images_list)
+        return rgb_np, depth_np
+
+    def val_transform(self, rgb, depth):
+        depth_np = depth
+        transform = transforms.Compose([
+            transforms.Resize(240.0 / iheight),
+            transforms.CenterCrop(self.output_size),
+        ])
+        rgb_np = transform(rgb)
+        rgb_np = np.asfarray(rgb_np, dtype='float') / 255
+        depth_np = transform(depth_np)
+
+        return rgb_np, depth_np

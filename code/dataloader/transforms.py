@@ -220,8 +220,8 @@ class ToTensor(object):
                 raise RuntimeError('img should be ndarray with 2 or 3 dimensions. Got {}'.format(img.ndim))
 
             # backward compatibility
-            # return img.float().div(255)
-            return img.float()
+            return img.float().div(255)
+            # return img.float()
 
 
 class NormalizeNumpyArray(object):
@@ -502,10 +502,10 @@ class ColorJitter(object):
     def __call__(self, img):
         """
         Args:
-            img (numpy.ndarray (C x H x W)): Input image.
+            img (numpy.ndarray (H x W x C)): Input image.
 
         Returns:
-            img (numpy.ndarray (C x H x W)): Color jittered image.
+            img (numpy.ndarray (H x W x C)): Color jittered image.
         """
         if not(_is_numpy_image(img)):
             raise TypeError('img should be ndarray. Got {}'.format(type(img)))
@@ -560,34 +560,58 @@ class Crop(object):
             self.i, self.j, self.h, self.w)
 
 class RandomCrop(object):
+    """Crops the given ``numpy.ndarray`` at the center.
+
+    Args:
+        size (sequence or int): Desired output size of the crop. If size is an
+            int instead of sequence like (h, w), a square crop (size, size) is
+            made.
     """
-    i: Upper pixel coordinate.
-    j: Left pixel coordinate.
-    h: Height of the cropped image.
-    w: Width of the cropped image.
-    """
-    def __init__(self, h, w):
-        self.h = h
-        self.w = w
+    def __init__(self, size):
+        if isinstance(size, numbers.Number):
+            self.size = (int(size), int(size))
+        else:
+            self.size = size
+
+    @staticmethod
+    def get_params(img, output_size):
+        """Get parameters for ``crop`` for random crop.
+
+        Args:
+            img (numpy.ndarray (H x W x C)): Image to be cropped.
+            output_size (tuple): Expected output size of the crop.
+
+        Returns:
+            tuple: params (i, j, h, w) to be passed to ``crop`` for random crop.
+        """
+        h = img.shape[0]
+        w = img.shape[1]
+        th, tw = output_size
+        i = np.random.randint(0, h - th)
+        j = np.random.randint(0, w - tw)
+        return i, j, th, tw
 
     def __call__(self, img):
         """
         Args:
             img (numpy.ndarray (H x W x C)): Image to be cropped.
+
         Returns:
             img (numpy.ndarray (H x W x C)): Cropped image.
         """
-        if not (_is_numpy_image(img)):
-            raise TypeError('img should be ndarray. Got {}'.format(type(img)))
-        o_h, o_w = img.shape[:2]
-        left = np.random.randint(0, o_w - self.w)
-        up = np.random.randint(0, o_h - self.h)
-        transforms = Crop(up, up+self.h, left, left+self.w)
-        if img.ndim in [2, 3]:
-            return transforms(img)
-        else:
-            raise RuntimeError(
-                'img should be ndarray with 2 or 3 dimensions. Got {}'.format(img.ndim))
+        i, j, h, w = self.get_params(img, self.size)
 
-    def __repr__(self):
-        return self.__class__.__name__ + '(h={2},w={3})'.format(self.h, self.w)
+        """
+        i: Upper pixel coordinate.
+        j: Left pixel coordinate.
+        h: Height of the cropped image.
+        w: Width of the cropped image.
+        """
+        if not(_is_numpy_image(img)):
+            raise TypeError('img should be ndarray. Got {}'.format(type(img)))
+        if img.ndim == 3:
+            return img[i:i+h, j:j+w, :]
+        elif img.ndim == 2:
+            return img[i:i + h, j:j + w]
+        else:
+            raise RuntimeError('img should be ndarray with 2 or 3 dimensions. Got {}'.format(img.ndim))
