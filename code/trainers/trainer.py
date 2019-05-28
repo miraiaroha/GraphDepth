@@ -6,7 +6,6 @@ import datetime
 import logging
 from torch.utils.data import DataLoader
 
-
 def init_log(output_dir):
     logging.basicConfig(level=logging.DEBUG,
                         format='%(asctime)s %(message)s',
@@ -17,6 +16,31 @@ def init_log(output_dir):
     console.setLevel(logging.INFO)
     logging.getLogger('').addHandler(console)
     return logging
+
+class data_prefetcher():
+    """
+       direct to: 
+       https://github.com/NVIDIA/apex/blob/f5cd5ae937f168c763985f627bbf850648ea5f3f/examples/imagenet/main_amp.py#L256
+    """
+    def __init__(self, loader):
+        self.loader = iter(loader)
+        self.stream = torch.cuda.Stream()
+        self.preload()
+
+    def preload(self):
+        try:
+            self.next_data = next(self.loader)
+        except StopIteration:
+            self.next_data = None
+            return
+        with torch.cuda.stream(self.stream):
+            self.next_data = self.next_data.cuda(non_blocking=True)
+            
+    def next(self):
+        torch.cuda.current_stream().wait_stream(self.stream)
+        data = self.next_data
+        self.preload()
+    return data
 
 
 class Trainer(object):
@@ -51,10 +75,12 @@ class Trainer(object):
         # Dataloader
         self.trainset = self.datasets[self.sets[0]]
         self.trainloader = DataLoader(self.trainset, self.batch_size,
-                                      shuffle=True, num_workers=2, drop_last=False)
+                                      shuffle=True, num_workers=2, 
+                                      pin_memory=True, drop_last=False)
         self.validset = self.datasets[self.sets[1]]
         self.validloader = DataLoader(self.validset, self.batch_size_valid,
-                                      shuffle=False, num_workers=4, drop_last=False)
+                                      shuffle=False, num_workers=4, 
+                                      pin_memory=Trainer, drop_last=False)
         if 'test' in self.sets:
             self.testset = self.datasets[self.sets[2]]
             self.testloader = DataLoader(self.testset, 1, shuffle=False)
@@ -115,7 +141,10 @@ class Trainer(object):
         self.criterion.to(device)
         self.net.train()
         # Iterate over data.
-        for step, data in enumerate(self.trainloader):
+        prefetcher = data_prefetcher(self.trainloader)
+        image, label = prefetcher.next()
+        step = 0
+        while image is not None:
             image, label = data[0].to(device), data[1].to(device)
             before_op_time = time.time()
             self.optimizer.zero_grad()
@@ -133,6 +162,8 @@ class Trainer(object):
                 self.print(print_str)
             self.global_step += 1
             self.train_total_time += time.time() - before_op_time
+        image, label = prefetcher.next()
+        step += 1
         return total_loss
 
     def eval(self, epoch):

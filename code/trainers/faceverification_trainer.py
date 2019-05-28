@@ -7,7 +7,7 @@ import numpy as np
 import scipy.io
 sys.path.append(os.path.dirname(__file__))
 from tensorboardX import SummaryWriter
-from trainer import Trainer
+from trainer import Trainer, data_prefetcher
 from torchstat import stat
 
 
@@ -85,7 +85,10 @@ class MobileFacenetTrainer(Trainer):
         self.criterion.to(device)
         self.net.train()
         # Iterate over data.
-        for step, data in enumerate(self.trainloader):
+        prefetcher = data_prefetcher(self.trainloader)
+        image, label = prefetcher.next()
+        step = 0
+        while image is not None:
             image, label = data[0].to(device), data[1].to(device)
             before_op_time = time.time()
             self.optimizer.zero_grad()
@@ -103,6 +106,8 @@ class MobileFacenetTrainer(Trainer):
                 self.print(print_str)
             self.global_step += 1
             self.train_total_time += time.time() - before_op_time
+        image, label = prefetcher.next()
+        step += 1
         return total_loss
 
     def eval(self, epoch):
@@ -133,7 +138,10 @@ class MobileFacenetTrainer(Trainer):
         valid_total_time = 0
         count = 0
         with torch.no_grad():
-            for step, data in enumerate(self.validloader):
+            prefetcher = data_prefetcher(self.validloader)
+            data = prefetcher.next()
+            step = 0
+            while data is not None:
                 for i in range(len(data)):
                     data[i] = data[i].to(device)
                 # forward
@@ -155,6 +163,8 @@ class MobileFacenetTrainer(Trainer):
                     featureRs = np.concatenate((featureRs, featureR), 0)
                 print('Test step [{}/{}].'.format(step + 1,
                                                   len(self.validloader)))
+                data = prefetcher.next()
+                step += 1
         fps = count / valid_total_time
         labels = np.array(self.validset.flags)
         Accs, Thresholds, scores, predictions, folds = self.eval_func(
@@ -181,7 +191,10 @@ class MobileFacenetTrainer(Trainer):
         featureLs = None
         featureRs = None
         with torch.no_grad():
-            for step, data in enumerate(self.testloader):
+            prefetcher = data_prefetcher(self.testloader)
+            data = prefetcher.next()
+            step = 0
+            while data is not None:
                 for i in range(len(data)):
                     data[i] = data[i].to(device)
                 before_op_time = time.time()
@@ -200,6 +213,8 @@ class MobileFacenetTrainer(Trainer):
                     featureRs = featureR
                 else:
                     featureRs = np.concatenate((featureRs, featureR), 0)
+                data = prefetcher.next()
+                step += 1
         # accuracy
         predictions = []
         featureLs = featureLs / \
