@@ -1,12 +1,12 @@
 import os
-import os.path
+import sys
+sys.path.append(os.path.dirname(__file__))
 import numpy as np
 import torch.utils.data as data
-import h5py
-import dataloaders.transforms as transforms
+import transforms
 from PIL import Image
 
-def img_loader(self, path, is_rgb=True):
+def img_loader(path, is_rgb=True):
     if is_rgb:
         img = np.array(Image.open(path).convert('RGB'))
     else:
@@ -65,7 +65,7 @@ class MyDataloader(data.Dataset):
             raise(RuntimeError("transform not defined"))
 
         depth_np = np.clip(depth_np, a_min=0, a_max=self.max_depth)
-        depth_np = np.expand_dims(depth, -1)
+        depth_np = np.expand_dims(depth_np, -1)
         input_tensor = to_tensor(rgb_np)
         depth_tensor = to_tensor(depth_np)
         return input_tensor, depth_tensor

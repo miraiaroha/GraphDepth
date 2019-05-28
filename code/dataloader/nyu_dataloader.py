@@ -1,6 +1,9 @@
+import os
+import sys
+sys.path.append(os.path.dirname(__file__))
 import numpy as np
-import dataloaders.transforms as transforms
-from dataloaders.dataloader import MyDataloader
+import transforms as transforms
+from dataloader import MyDataloader
 
 iheight, iwidth = 480, 640 # raw image size
 
