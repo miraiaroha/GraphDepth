@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
+from torch.nn import Parameter
 
 
 class FeatureExtractor(nn.Module):
@@ -205,3 +205,65 @@ class ConvGroup(nn.Module):
         x = self.bn(x)
         x = self.relu(x)
         return x
+
+
+class GraphConvolutionBlock_(nn.Module):
+    def __init__(self, node, channel):
+        super(GraphConvolutionBlock_, self).__init__()
+        self.Ag = Parameter(torch.tensor(node, node))
+        self.conv1 = nn.Conv1d(channel, channel, kernel_size=1, stride=1, padding=0)
+        self.conv2 = nn.Conv1d(node, node, kernel_size=1, stride=1, padding=0)
+
+    def get_adjecent_matrix(self):
+        return self.Ag
+
+    def forward(self, x):
+        """
+        :param x: shape [batch, node, channel]
+        :return: x shape [batch, node, channel]
+        """
+        x = (1 - self.Ag) * x
+        x = self.conv1(x).permute(0, 2, 1)
+        x = self.conv2(x).permute(0, 2, 1)
+        return x
+
+
+class GloRe2d(nn.Module):
+    def __init__(self, in_channels, mid_channels, out_channels, node, n):
+        super(GloRe2d, self).__init__()
+        self.n = n
+        self.conv_reduce = nn.Conv2d(in_channels, mid_channels, kernel_size=1, stride=1, padding=0)
+        self.conv_B = nn.Conv2d(in_channels, node, kernel_size=1, stride=1, padding=0)
+        self.GraphConvs = nn.Sequential(*[GraphConvolutionBlock_(node, mid_channels)
+                                        for _ in range(n)])
+        self.conv_extend = nn.Conv2d(mid_channels, out_channels, kernel_size=1, stride=1, padding=0)
+
+    def get_map(self):
+        map_list = [self.B]
+        for i in range(self.n):
+            map_list.append(self.GraphConvs[i].get_adjacent_matrix())
+        return map_list
+
+    def forward(self, x):
+        """
+        :param x: shape [batch, h, w, c]
+                B: shape [batch, N, h*w]
+                V: shape [batch, node, c']
+        :return: y: shape [batch, h, w, c]
+        """
+        skip_x = x
+        # Coordinate Space to Interaction Space
+        b, h, w, _ = x.shape
+        B = self.conv_b(x).view(b, h * w, -1).permute(0, 2, 1)
+        self.B = B
+        x = self.conv_reduce(x).view(b, h*w, -1)
+        V = torch.matmul(B, x)
+
+        # Graph Convolution Update
+        Z = self.GraphConvs(V)
+
+        # Interaction Space to Coordinate Space
+        y = torch.matmul(B.t(), Z)
+        y = self.conv_extend(y).view(b, h, w, -1)
+        return skip_x + y
+
