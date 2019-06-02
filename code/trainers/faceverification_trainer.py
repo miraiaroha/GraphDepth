@@ -29,7 +29,7 @@ class MobileFacenetTrainer(Trainer):
         super().__init__(net, datasets, optimizer, lr_scheduler, criterion,
                          batch_size=params['batch_size'], batch_size_valid=params['batch_size_valid'],
                          max_epochs=params['max_epochs'], test_freq=params['test_freq'],
-                         use_gpu=params['use_gpu'], resume=params['resume'],
+                         use_gpu=params['use_gpu'], resume=params['resume'], mode=params['mode'],
                          sets=sets, workspace_dir=workspace_dir, log_dir=log_dir)
         # uncomment to display the model complexity
         #stat(self.net, (3, self.params['height'], self.params['width']))

@@ -30,14 +30,14 @@ class MyDataloader(data.Dataset):
         self.images = make(root_image, image_txt)
         self.depths = make(root_depth, depth_txt)
         assert len(self.images)>0, "Found 0 images in folder of: " + root_image + "\n"
-        print("Found {} images in {} folder.".format(len(self.imgs), mode))
+        print("Found {} images in {} folder.".format(len(self.images), mode))
         if mode == 'train':
             self.transform = self.train_transform
-        elif mode == 'val':
+        elif mode in ['val', 'test']:
             self.transform = self.val_transform
         else:
             raise (RuntimeError("Invalid dataset type: " + mode + "\n"
-                                "Supported dataset types are: train, val"))
+                                "Supported dataset types are: train, eval, test"))
         self.loader = loader
 
     def train_transform(self, rgb, depth):
