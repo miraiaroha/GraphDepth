@@ -9,60 +9,56 @@ import argparse
 cmap = plt.cm.viridis
 
 def load_params_from_parser():
-    modes = ['train', 'eval', 'test', 'finetune']
+    modes = ['train', 'test', 'finetune', 'retain']
     encoder_names = ['resnet50', 'resnet101']
-    decoder_names = ['graph']
-    classifier_type = ['CE', 'OR']
+    decoder_names = ['graph', 'attention']
+    classifier_type = ['CE', 'OR', 'OHEM']
     inference_type = ['hard', 'soft']
     loss_names = ['l1', 'l2']
     opt_names = ['sgd', 'adam', 'adagrad', 'amsgrad', 'adabound', 'amsbound']
     sch_names = ['step', 'poly']
     dataset_names = ['nyu', 'kitti']
-    # from dataloaders.dense_to_sparse import UniformSampling, SimulatedStereo
-    # sparsifier_names = [x.name for x in [UniformSampling, SimulatedStereo]]
-    # from models import Decoder
-    # decoder_names = Decoder.names
-    # from dataloaders.dataloader import MyDataloader
-    # modality_names = MyDataloader.modality_names
+
     parser = argparse.ArgumentParser(description='GraphDepth Pytorch Implementation.')
-    parser.add_argument('--mode',                     type=str,   help='mode: '+'|'.join(modes)+' (default: fintune)', default='finetune',  choices=modes)
-    parser.add_argument('--encoder',                  type=str,   help='encoder: '+'|'.join(encoder_names)+' (default: resnet50)', default='resnet50', choices=encoder_names)
-    parser.add_argument('--decoder',                  type=str,   help='decoder: '+'|'.join(decoder_names)+' (default: graph', default='graph', choices=decoder_names)
-    parser.add_argument('--classifier',               type=str,   help='classifier: '+'|'.join(classifier_type)+' (default: OR', default='OR', choices=classifier_type)
-    parser.add_argument('--inference',                type=str,   help='inference: '+'|'.join(inference_type)+' (default: soft', default='soft', choices=inference_type)
-    parser.add_argument('--dataset',                  type=str,   help='dataset: '+'|'.join(dataset_names)+' (default: nyu)', default='nyu', choices=dataset_names)
-    parser.add_argument('--rgbdir',                   type=str,   help='root to rgb', required=True)
-    parser.add_argument('--depdir',                   type=str,   help='root to depth', required=True)
-    parser.add_argument('--train-rgb', '--trainrgb'   type=str,   help='path to the rgb txt file of trainset', required=True)
-    parser.add_argument('--train-dep', '--traindep'   type=str,   help='path to the depth txt file of trainset', required=True)
-    parser.add_argument('--val-rgb', '--valrgb',      type=str,   help='path to the rgb txt file of valset', required=True)
-    parser.add_argument('--val-dep', '--valdep',      type=str,   help='path to the depth txt file of valset', required=True)
-    parser.add_argument('--test-rgb', '--testrgb',    type=str,   help='path to the rgb txt file of testset', required=True)
-    parser.add_argument('--test-dep', '--testdep',    type=str,   help='path to the depth txt file of testset', required=True)
-    parser.add_argument('--batch-size', '-b',         type=int,   help='batch size of trainset (default: 8)', default=8)
-    parser.add_argument('--batch-size-val', '--bval', type=int,   help='batch size of valset (default: 8)', default=8)
-    parser.add_argument('--epochs',                   type=int,   help='number of epochs (default: 8)', default=50)
+    parser.add_argument('--mode',                          type=str,   help='mode: '+'|'.join(modes)+' (default: fintune)', default='finetune',  choices=modes)
+    parser.add_argument('--encoder',                       type=str,   help='encoder: '+'|'.join(encoder_names)+' (default: resnet50)', default='resnet50', choices=encoder_names)
+    parser.add_argument('--decoder',                       type=str,   help='decoder: '+'|'.join(decoder_names)+' (default: graph)', default='graph', choices=decoder_names)
+    parser.add_argument('--classifier',                    type=str,   help='classifier: '+'|'.join(classifier_type)+' (default: OR)', default='OR', choices=classifier_type)
+    parser.add_argument('--inference',                     type=str,   help='inference: '+'|'.join(inference_type)+' (default: soft)', default='soft', choices=inference_type)
+    # dataset
+    parser.add_argument('--dataset',                       type=str,   help='dataset: '+'|'.join(dataset_names)+' (default: nyu)', default='nyu', choices=dataset_names)
+    parser.add_argument('--rgbdir',                        type=str,   help='root to rgb', required=True)
+    parser.add_argument('--depdir',                        type=str,   help='root to depth', required=True)
+    parser.add_argument('--train-rgb',    dest='trainrgb', type=str,   help='path to the rgb txt file of trainset', required=True)
+    parser.add_argument('--train-dep',    dest='traindep', type=str,   help='path to the depth txt file of trainset', required=True)
+    parser.add_argument('--val-rgb',      dest='valrgb',   type=str,   help='path to the rgb txt file of valset', required=True)
+    parser.add_argument('--val-dep',      dest='valdep',   type=str,   help='path to the depth txt file of valset', required=True)
+    parser.add_argument('--test-rgb',     dest='testrgb',  type=str,   help='path to the rgb txt file of testset')
+    parser.add_argument('--test-dep',     dest='testdep',  type=str,   help='path to the depth txt file of testset')
+    parser.add_argument('--batch', '-b',                   type=int,   help='batch size of trainset (default: 8)', default=8)
+    parser.add_argument('--batchval',     dest='bval',     type=int,   help='batch size of valset (default: 8)', default=8)
+    parser.add_argument('--epochs',                        type=int,   help='number of epochs (default: 8)', default=50)
     # optimizer
-    parser.add_argument('--optimizer', '-o',          type=str,   help='optimizer: '+'|'.join(opt_names)+' (default: sgd)', default='sgd', choices=opt_names)
-    parser.add_argument('--lr',                       type=float, help='initial learning rate (default: 1e-2)', default=1e-4)
-    parser.add_argument('--final-lr', '--flr',        type=float, help='final learning rate of adabound (default: 1e-2)', default=1e-2)
-    parser.add_argument('--momentum',                 type=float, help='momentum (default: 0.9)', default=0.9)
-    parser.add_argument('--gamma',                    type=float, help='convergence speed term of AdaBound (default: 1e-3)' , default=1e-3)
-    parser.add_argument('--beta1',                    type=float, help='Adam coefficients beta1 (default: 0.9)', default=0.9)
-    parser.add_argument('--beta2',                    type=float, help='Adam coefficients beta2 (default: 0.999)', default=0.999)
-    parser.add_argument('--weight-decay', '--wd',     type=float, help='initial learning rate (default: 5e-4)', default=5e-4)
+    parser.add_argument('--optimizer', '-o',               type=str,   help='optimizer: '+'|'.join(opt_names)+' (default: sgd)', default='sgd', choices=opt_names)
+    parser.add_argument('--lr',                            type=float, help='initial learning rate (default: 1e-2)', default=1e-4)
+    parser.add_argument('--final-lr', '--flr', dest='flr', type=float, help='final learning rate of adabound (default: 1e-2)', default=1e-2)
+    parser.add_argument('--momentum',                      type=float, help='momentum (default: 0.9)', default=0.9)
+    parser.add_argument('--gamma',                         type=float, help='convergence speed term of AdaBound (default: 1e-3)' , default=1e-3)
+    parser.add_argument('--beta1',                         type=float, help='Adam coefficients beta1 (default: 0.9)', default=0.9)
+    parser.add_argument('--beta2',                         type=float, help='Adam coefficients beta2 (default: 0.999)', default=0.999)
+    parser.add_argument('--weight-decay', dest='wd',       type=float, help='initial learning rate (default: 5e-4)', default=5e-4)
     # scheduler
-    parser.add_argument('--scheduler', '-s',          type=str,   help='mode: '+'|'.join(sch_names)+' (default: step)', default='step',  choices=sch_names)
-    parser.add_argument('--lr-decay', '--ld',         type=float, help='lr decay rate of poly scheduler (default: 0.9)' , default=0.9)
-    parser.add_argument('--alpha-seg', '--Wseg',      type=float, help='coefficient of segmentation loss (default: 0.5)', default=0.5)
-    parser.add_argument('--gpu',                      type=bool,  help='GPU or CPU (default: True)', default=True)
-    parser.add_argument('--threads',                  type=int,   help='number of threads for data loading (default: 4)', default=4)
-    parser.add_argument('--classes',                  type=int,   help='number of discrete classes of detph (default: 80)', default=80)
-    parser.add_argument('--eval-freq', '-f',          type=int,   help='number of evaluation interval during training (default: 1)', default=1)
-    parser.add_argument('--workdir',                  type=str,   help='directory for storing training files', default='../workspace/')
-    parser.add_argument('--logdir',                   type=str,   help='subdir of workdir, storing checkpoint and logfile (style: /log_net_dataset_exp)')
-    parser.add_argument('--resdir',                   type=str,   help='subdir of logdir, storing predicted results (default: /res)', default='/res')
-    parser.add_argument('--resume',                               help='reloaded checkpoint, absolute path (str), given epoch number (int) or nn.Module class')
+    parser.add_argument('--scheduler', '-s',               type=str,   help='mode: '+'|'.join(sch_names)+' (default: step)', default='step',  choices=sch_names)
+    parser.add_argument('--lr-decay', '--lrd', dest='lrd', type=float, help='lr decay rate of poly scheduler (default: 0.9)' , default=0.9)
+    parser.add_argument('--alpha-seg', '-W',  dest='Wseg', type=float, help='coefficient of segmentation loss (default: 0.5)', default=0.5)
+    parser.add_argument('--gpu',                           type=bool,  help='GPU or CPU (default: True)', default=True)
+    parser.add_argument('--threads',                       type=int,   help='number of threads for data loading (default: 4)', default=4)
+    parser.add_argument('--classes',                       type=int,   help='number of discrete classes of detph (default: 80)', default=80)
+    parser.add_argument('--eval-freq', '-f',               type=int,   help='number of evaluation interval during training (default: 1)', default=1)
+    parser.add_argument('--workdir',                       type=str,   help='directory for storing training files', default='../workdir/')
+    parser.add_argument('--logdir',                        type=str,   help='subdir of workdir, storing checkpoint and logfile (style: log_net_dataset_exp)')
+    parser.add_argument('--resdir',                        type=str,   help='subdir of logdir, storing predicted results (default: res)', default='res')
+    parser.add_argument('--resume',                                    help='reloaded checkpoint, absolute path (str), given epoch number (int) or nn.Module class')
 
     args = parser.parse_args()
 

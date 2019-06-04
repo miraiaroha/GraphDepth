@@ -1,5 +1,6 @@
-import functools
+import os
 import sys
+sys.path.append(os.path.dirname(__file__))
 import numpy as np
 import torch
 import torch.nn as nn
@@ -8,12 +9,7 @@ from torch.autograd import Variable
 from collections import OrderedDict
 from gcdecoder import GCDecoder
 from sadecoder import SADecoder
-from modules import *
-from losses import *
-
-# sys.path.append('/inplace_abn')
-# from inplace_abn.bn import InPlaceABN
-#BatchNorm2d = functools.partial(InPlaceABN, activation='none')
+from losses import OrdinalRegression2d, CrossEntropy2d, OhemCrossEntropy2d
 
 def continuous2discrete(continuous_depth, Min, Max, num_classes):
     if continuous_depth.is_cuda:
@@ -30,6 +26,7 @@ def discrete2continuous(discrete_depth, Min, Max, num_classes):
 
 class ClassificationModel(nn.Module):
     def __init__(self, min_depth, max_depth, num_classes, classifierType, inferenceType):
+        super().__init__()
         self.min_depth = torch.tensor(min_depth, dtype=torch.float)
         self.max_depth = torch.tensor(max_depth, dtype=torch.float)
         self.num_classes = torch.tensor(num_classes, dtype=torch.float)
@@ -102,8 +99,8 @@ class ClassificationModel(nn.Module):
         raise NotImplementedError
 
     
-def make_decoder(decoder='graph'):
-    command = decoder.split('_')
+def make_decoder(decoder='graph 2048 128 1'):
+    command = decoder.split(' ')
     if command[0] == 'graph':
         dec = GCDecoder
     elif command[0] == 'attention':
@@ -113,10 +110,10 @@ def make_decoder(decoder='graph'):
                            'The decoder must be either graph or attention.')
     return dec(*[int(x) for x in command[1:]])
 
-def make_classifier(classifier='OR', num_classes=80, in_channel=2048):
+def make_classifier(classifierType='OR', num_classes=80, in_channel=2048):
     if classifierType == 'CE':
         channel = num_classes 
-    elif classifier == 'OR':
+    elif classifierType == 'OR':
         channel = 2 * num_classes
     else:
         raise RuntimeError('classifier not found.' +
@@ -167,11 +164,10 @@ class ResNet(ClassificationModel):
                  classifierType, inferenceType, decoderType,
                  layers=[3, 4, 6, 3], 
                  block=Bottleneck):
-        self.inplanes = 64
         # Note: classifierType: CE=Cross Entropy, OR=Ordinal Regression
         super(ResNet, self).__init__(min_depth, max_depth, num_classes, classifierType, inferenceType)
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7,
-                               stride=2, padding=3, bias=False)
+        self.inplanes = 64
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=7,stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu1 = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -180,10 +176,8 @@ class ResNet(ClassificationModel):
         # for p in self.parameters():
         #     p.requires_grad = False
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
-        self.layer3 = self._make_layer(
-            block, 256, layers[2], stride=1, dilation=2)
-        self.layer4 = self._make_layer(
-            block, 512, layers[3], stride=1, dilation=4)
+        self.layer3 = self._make_layer(block, 256, layers[2], stride=1, dilation=2)
+        self.layer4 = self._make_layer(block, 512, layers[3], stride=1, dilation=4)
         # for m in self.modules():
         #     if isinstance(m, nn.BatchNorm2d):
         #         m.weight.requires_grad = False
@@ -236,23 +230,23 @@ class ResNet(ClassificationModel):
     class LossFunc(nn.Module):
         def __init__(self, min_depth, max_depth, num_classes, classifierType, ohem=False, ignore_index=None):
             super(ResNet.LossFunc, self).__init__()
-            self.scale = scale
             self.min_depth = torch.tensor(min_depth, dtype=torch.float)
             self.max_depth = torch.tensor(max_depth, dtype=torch.float)
             self.num_classes = torch.tensor(num_classes, dtype=torch.float)
             self.ignore_index = ignore_index
-            if classifierType == 'OR':
-                self.AppearanceLoss = OrdinalRegression2d(
-                    num_classes, ignore_index=ignore_index)
-            elif classifierType == 'CE':  # 'CE'
-                if ohem:  # 'Online Hard Example Mining'
-                    ignore_index = num_classes + 1 if ignore_index == None
-                    self.AppearanceLoss = OhemCrossEntropy2d(ignore_index)
-                else:
-                    self.AppearanceLoss = CrossEntropy2d(num_classes, ignore_index)
+            if classifierType == 'OR': # 'Ordinal Regression
+                self.AppearanceLoss = OrdinalRegression2d(num_classes, ignore_index=ignore_index)
+            elif classifierType == 'CE':  # 'Cross Entropy'
+                if ignore_index is None:
+                    ignore_index = num_classes + 1
+                self.AppearanceLoss = CrossEntropy2d(num_classes, ignore_index)
+            elif classifierType == 'OHEM': # 'Online Hard Example Mining'
+                if ignore_index is None:
+                    ignore_index = num_classes + 1
+                    self.AppearanceLoss = OhemCrossEntropy2d(ignore_index) 
             else:
                 raise RuntimeError('classifier not found.' +
-                           'The classifier must be either of CE or OR.')
+                           'The classifier must be either of OR, CE or OHEM.')
 
         def forward(self, pred_score, label, sim_map, epoch):
             """

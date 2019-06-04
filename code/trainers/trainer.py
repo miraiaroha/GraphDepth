@@ -244,9 +244,9 @@ class Trainer(object):
                     load_checkpoint(net):
                         Loads the parameters from the given net (nn.Module).
             mode:
-                If mode='fintune', load the pretrained model and start training from epoch 1,
-                else reload the model and restart training from the breakpoint. IT IS NOTED THAT
-                you must initialize the optimizer and scheduler after execute this function!
+                'fintune': load the pretrained model and start training from epoch 1,
+                'retain': reload the model and restart training from the breakpoint. 
+                'test': just testing the model.
         """
         net_type = type(self.net).__name__
         if isinstance(checkpoint, nn.Module):

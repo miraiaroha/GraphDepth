@@ -20,7 +20,7 @@ class NYUDataset(MyDataloader):
                  min_depth, max_depth,
                  mode='train', make=make_dataset):
         super(NYUDataset, self).__init__(root_image, root_depth, image_txt, depth_txt, min_depth, max_depth, mode, make)
-        self.output_size = (224, 304)
+        self.input_size = (224, 304)
 
     def train_transform(self, rgb, depth):
         s = np.random.uniform(1.0, 1.5) # random scaling
@@ -33,7 +33,7 @@ class NYUDataset(MyDataloader):
             transforms.Resize(240.0 / iheight), # this is for computational efficiency, since rotation can be slow
             transforms.Rotate(angle),
             transforms.Resize(s),
-            transforms.RandomCrop(self.output_size),
+            transforms.RandomCrop(self.input_size),
             transforms.HorizontalFlip(do_flip)
         ])
         rgb_np = transform(rgb)
@@ -48,7 +48,7 @@ class NYUDataset(MyDataloader):
         depth_np = depth
         transform = transforms.Compose([
             transforms.Resize(240.0 / iheight),
-            transforms.CenterCrop(self.output_size),
+            transforms.CenterCrop(self.input_size),
         ])
         rgb_np = transform(rgb)
         rgb_np = np.asfarray(rgb_np, dtype='float') / 255

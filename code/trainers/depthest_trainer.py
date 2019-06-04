@@ -39,7 +39,8 @@ class DepthEstimationTrainer(Trainer):
                          gpus=params.gpus, resume=params.resume, mode=params.mode,
                          sets=sets, workdir=workdir, logdir=logdir, resdir=resdir)
         # uncomment to display the model complexity
-        #stat(self.net, (3, self.params['height'], self.params['width']))
+        stat(self.net, (3, *self.datasets[sets[0]].input_size))
+        exit()
 
     def train(self):
         torch.backends.cudnn.benchmark = True

@@ -7,7 +7,7 @@ from collections import OrderedDict
 class GraphConvBlock_(nn.Module):
     def __init__(self, node, channel):
         super(GraphConvBlock_, self).__init__()
-        self.Ag = Parameter(torch.tensor(node, node))
+        self.Ag = Parameter(torch.rand(node, node))
         self.conv1 = nn.Conv1d(node, node, kernel_size=1, stride=1, padding=0)
         self.conv2 = nn.Conv1d(channel, channel, kernel_size=1, stride=1, padding=0)
         

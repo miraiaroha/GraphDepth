@@ -13,7 +13,7 @@ from torch.optim import lr_scheduler
 
 from depthest_utils import load_params_from_parser, compute_errors
 from trainers.depthest_trainer import DepthEstimationTrainer
-from model import ResNet
+from models.model import ResNet
 
 torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.enabled = True
@@ -40,30 +40,29 @@ def create_datasets(args):
     if args.mode == 'test':
         test_dataset = TargetDataset(args.rgbdir, args.depdir, args.testrgb, args.testdep, args.min_depth, args.max_depth, mode=args.mode)
     
-    print("=> datasets created.")
+    print("<= datasets created.")
     datasets = {'train': train_dataset, 'val': val_dataset, 'test': test_dataset}
     return datasets
 
 def create_network(args):
     resnet_layer_settings = {'50':  [3, 4, 6, 3], 
                              '101': [3, 4, 23, 3]}
-    if args.mode == 'resnet50':
+    if args.encoder == 'resnet50':
         setttings = resnet_layer_settings['50']
-    elif args.mode == 'resnet101':
+    elif args.encoder == 'resnet101':
         setttings = resnet_layer_settings['101']
     else:
         raise RuntimeError('network not found.' +
                            'The network must be either of resnet50 or resnet101.')
 
-    net = ResNet(args.min_depth, args.max_depth, args.num_classes, 
-                    args.classifier, args.inference, args.decoder, setttings)
+    net = ResNet(args.min_depth, args.max_depth, args.classes, args.classifier, args.inference, args.decoder, setttings)
     return net
 
 def create_lossfunc(args, net):
     ignore = None
     if args.dataset == 'kitti':
         ignore = 0
-    criterion = net.LossFunc(args.min_depth, args.max_depth, args.num_classes, args.classifier, ignore_index=ignore)
+    criterion = net.LossFunc(args.min_depth, args.max_depth, args.classes, args.classifier, ignore_index=ignore)
     return criterion
 
 def create_params(args, net):
@@ -79,7 +78,7 @@ def create_params(args, net):
         base_modules = list(net.children())[:8]
         base_params = get_params(base_modules, '')
         base_params = filter(lambda p: p.requires_grad, base_params)
-        add_modules = list(myModel.children())[8:]
+        add_modules = list(net.children())[8:]
         add_weight_params = get_params(add_modules, 'weight')
         add_bias_params = get_params(add_modules, 'bias')
         if args.optimizer in ['adabound', 'amsbound']:
@@ -121,7 +120,7 @@ def create_scheduler(args, optimizer):
         scheduler = lr_scheduler.ExponentialLR(optimizer, gamma=args.lrd)
     return scheduler
     
-def train(args, net, datasets, criterion, optimizer, scheduler, isFineTune=False):
+def train(args, net, datasets, criterion, optimizer, scheduler):
     # Define trainer
     Trainer = DepthEstimationTrainer(params=args,
                                      net=net,
@@ -132,17 +131,19 @@ def train(args, net, datasets, criterion, optimizer, scheduler, isFineTune=False
                                      sets=list(datasets.keys()),
                                      eval_func=compute_errors,
                                      )
-    if isFineTune:
+    if args.mode == 'finetune':
         if args.encoder == 'resnet50':
             resnet = models.resnet50(pretrained=True)
         elif args.encoder == 'resnet101':
             resnet = models.resnet101(pretrained=True)
-        Trainer.reload(resume=resnet, finetune=True)
+        Trainer.reload(resume=resnet, mode='finetune')
+    if args.mode == 'retain':
+        Trainer.reload(resume=args.resume, mode='retain')
     
     Trainer.train()
     return
 
-def test(args, net, datasets):
+def test(args, net, datasets, criterion):
     # Define trainer
     Trainer = DepthEstimationTrainer(params=args,
                                      net=net,
@@ -153,45 +154,9 @@ def test(args, net, datasets):
                                      sets=list(datasets.keys()),
                                      eval_func=compute_errors,
                                      )
-    Trainer.load_checkpoint(params['resume'])
-    Trainer.test(0.4)
+    Trainer.reload(resume=args.resume, mode='test')
+    Trainer.test()
     return
-
-    if isFineTune:
-        
-        # Finetune
-        # Load the pretrained model
-        # @ Note: the optimizer and lr_scheduler should be redefined if execute Trainer.reload(True),
-        
-        net = Trainer.net
-        # Define optimizers
-        ignored_params = list(map(id, net.linear1.parameters()))
-        ignored_params += [id(net.weight)]
-        prelu_params = []
-        for m in net.modules():
-            if isinstance(m, nn.PReLU):
-                ignored_params += list(map(id, m.parameters()))
-                prelu_params += m.parameters()
-        base_params = filter(lambda p: id(p) not in ignored_params,
-                            net.parameters())
-        optimizer = optim.SGD([
-            {'params': base_params, 'weight_decay': 4e-5},
-            {'params': net.linear1.parameters(), 'weight_decay': 4e-4},
-            {'params': net.weight, 'weight_decay': 4e-4},
-            {'params': prelu_params, 'weight_decay': 0.0}
-        ], lr=0.01, momentum=0.9, nesterov=True)
-        exp_lr_scheduler = lr_scheduler.MultiStepLR(
-            optimizer, milestones=[12], gamma=0.1)
-
-        Trainer.optimizer = optimizer
-        Trainer.lr_scheduler = exp_lr_scheduler
-        Trainer.train()
-        del Trainer
-        return
-
-        
-
-    
 
 def main():
     args = load_params_from_parser()
@@ -206,58 +171,12 @@ def main():
     optimizer = create_optimizer(args, optim_params)
     # learning rate scheduler
     scheduler = create_scheduler(args, optimizer)
-    if args.mode == 'train':
-        train(args, net, datastes, criterion, optimizer, scheduler, False)
-    elif args.mode == 'test':
-        test(args, net, datastes, criterion)
-    elif args.mode == 'finetune':
-        train(args, net, datastes, criterion, optimizer, scheduler, True)
 
-    
-
-    # Evaluate one epoch
-    # if args.mode == 'eval':
-    #     Trainer.reload()
-    #     acc = Trainer.eval_epoch()
-    #     print("acc {:.4f}".format(acc))
-    #     return
-
-    # Test model
     if args.mode == 'test':
-        Trainer.load_checkpoint(params['resume'])
-        Trainer.test(0.4)
-        return
+        test(args, net, datastes, criterion)
+    else:
+        train(args, net, datastes, criterion, optimizer, scheduler)
 
-    # Finetune
-    # Load the pretrained model
-    # @ Note: the optimizer and lr_scheduler should be redefined if execute Trainer.reload(True),
-    Trainer.reload(finetune=True)
-    net = Trainer.net
-    # Define optimizers
-    ignored_params = list(map(id, net.linear1.parameters()))
-    ignored_params += [id(net.weight)]
-    prelu_params = []
-    for m in net.modules():
-        if isinstance(m, nn.PReLU):
-            ignored_params += list(map(id, m.parameters()))
-            prelu_params += m.parameters()
-    base_params = filter(lambda p: id(p) not in ignored_params,
-                         net.parameters())
-    optimizer = optim.SGD([
-        {'params': base_params, 'weight_decay': 4e-5},
-        {'params': net.linear1.parameters(), 'weight_decay': 4e-4},
-        {'params': net.weight, 'weight_decay': 4e-4},
-        {'params': prelu_params, 'weight_decay': 0.0}
-    ], lr=0.01, momentum=0.9, nesterov=True)
-    exp_lr_scheduler = lr_scheduler.MultiStepLR(
-        optimizer, milestones=[12], gamma=0.1)
-
-    Trainer.optimizer = optimizer
-    Trainer.lr_scheduler = exp_lr_scheduler
-    Trainer.train()
-    del Trainer
-    return
     
-
 if __name__ == '__main__':
     main()

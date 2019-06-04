@@ -1,6 +1,7 @@
 checkpoint/
 workspace/
 *.ipynb
+*.sh
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -104,4 +105,3 @@ ENV/
 # mypy
 .mypy_cache/
 
-run_exp_script.sh
