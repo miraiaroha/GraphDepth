@@ -36,7 +36,7 @@ def load_params_from_parser():
     parser.add_argument('--test-rgb',     dest='testrgb',  type=str,   help='path to the rgb txt file of testset')
     parser.add_argument('--test-dep',     dest='testdep',  type=str,   help='path to the depth txt file of testset')
     parser.add_argument('--batch', '-b',                   type=int,   help='batch size of trainset (default: 8)', default=8)
-    parser.add_argument('--batchval',     dest='bval',     type=int,   help='batch size of valset (default: 8)', default=8)
+    parser.add_argument('--batchval', '--bval',            type=int,   help='batch size of valset (default: 8)', default=8)
     parser.add_argument('--epochs',                        type=int,   help='number of epochs (default: 8)', default=50)
     # optimizer
     parser.add_argument('--optimizer', '-o',               type=str,   help='optimizer: '+'|'.join(opt_names)+' (default: sgd)', default='sgd', choices=opt_names)
@@ -54,7 +54,7 @@ def load_params_from_parser():
     parser.add_argument('--gpu',                           type=bool,  help='GPU or CPU (default: True)', default=True)
     parser.add_argument('--threads',                       type=int,   help='number of threads for data loading (default: 4)', default=4)
     parser.add_argument('--classes',                       type=int,   help='number of discrete classes of detph (default: 80)', default=80)
-    parser.add_argument('--eval-freq', '-f',               type=int,   help='number of evaluation interval during training (default: 1)', default=1)
+    parser.add_argument('--eval-freq', '-f', dest='f',     type=int,   help='number of evaluation interval during training (default: 1)', default=1)
     parser.add_argument('--workdir',                       type=str,   help='directory for storing training files', default='../workdir/')
     parser.add_argument('--logdir',                        type=str,   help='subdir of workdir, storing checkpoint and logfile (style: log_net_dataset_exp)')
     parser.add_argument('--resdir',                        type=str,   help='subdir of logdir, storing predicted results (default: res)', default='res')

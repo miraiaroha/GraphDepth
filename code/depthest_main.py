@@ -92,23 +92,23 @@ def create_params(args, net):
     return optim_params
 
 def create_optimizer(args, optim_params):
-    if args.optim == 'sgd':
+    if args.optimizer == 'sgd':
         return optim.SGD(optim_params, args.lr, momentum=args.momentum,
                          weight_decay=args.weight_decay)
-    elif args.optim == 'adagrad':
+    elif args.optimizer == 'adagrad':
         return optim.Adagrad(optim_params, args.lr, weight_decay=args.weight_decay)
-    elif args.optim == 'adam':
+    elif args.optimizer == 'adam':
         return optim.Adam(optim_params, args.lr, betas=(args.beta1, args.beta2),
                           weight_decay=args.weight_decay)
-    elif args.optim == 'amsgrad':
+    elif args.optimizer == 'amsgrad':
         return optim.Adam(optim_params, args.lr, betas=(args.beta1, args.beta2),
                           weight_decay=args.weight_decay, amsgrad=True)
-    elif args.optim == 'adabound':
+    elif args.optimizer == 'adabound':
         return AdaBound(optim_params, args.lr, betas=(args.beta1, args.beta2),
-                        final_lr=args.final_lr, gamma=args.gamma,
-                        weight_decay=args.weight_decay)
+                        final_lr=args.flr, gamma=args.gamma,
+                        weight_decay=args.wd)
     else:
-        assert args.optim == 'amsbound'
+        assert args.optimizer == 'amsbound'
         return AdaBound(optim_params, args.lr, betas=(args.beta1, args.beta2),
                         final_lr=args.final_lr, gamma=args.gamma, 
                         weight_decay=args.weight_decay, amsbound=True)

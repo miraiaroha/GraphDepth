@@ -19,7 +19,8 @@ class GraphConvBlock_(nn.Module):
         :param x: shape [batch, node, channel]
         :return: x shape [batch, node, channel]
         """
-        x = (1 - self.Ag) * x
+        x = torch.matmul(x.permute(0, 2, 1), 1 - self.Ag)
+        x = x.permute(0, 2, 1)
         x = self.conv1(x).permute(0, 2, 1)
         x = self.conv2(x).permute(0, 2, 1)
         return x
@@ -50,7 +51,7 @@ class GloRe2d(nn.Module):
         """
         skip_x = x
         # Coordinate Space to Interaction Space
-        b, h, w, _ = x.shape
+        b, _, h, w = x.shape
         B = self.conv_B(x).view(b, -1, h * w)
         self.B = B
         x = self.conv_reduce(x).view(b, -1, h*w).permute(0, 2, 1)
@@ -60,8 +61,8 @@ class GloRe2d(nn.Module):
         Z = self.GraphConvs(V)
 
         # Interaction Space to Coordinate Space
-        y = torch.matmul(B.t(), Z)
-        y = self.conv_extend(y).view(b, -1, h, w)
+        y = torch.matmul(Z.permute(0, 2, 1), B)
+        y = self.conv_extend(y.view(b, -1, h, w))
         return skip_x + y
 
 

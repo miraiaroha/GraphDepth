@@ -235,11 +235,11 @@ class ResNet(ClassificationModel):
             self.num_classes = torch.tensor(num_classes, dtype=torch.float)
             self.ignore_index = ignore_index
             if classifierType == 'OR': # 'Ordinal Regression
-                self.AppearanceLoss = OrdinalRegression2d(num_classes, ignore_index=ignore_index)
+                self.AppearanceLoss = OrdinalRegression2d(ignore_index=ignore_index)
             elif classifierType == 'CE':  # 'Cross Entropy'
                 if ignore_index is None:
                     ignore_index = num_classes + 1
-                self.AppearanceLoss = CrossEntropy2d(num_classes, ignore_index)
+                self.AppearanceLoss = CrossEntropy2d(ignore_index)
             elif classifierType == 'OHEM': # 'Online Hard Example Mining'
                 if ignore_index is None:
                     ignore_index = num_classes + 1

@@ -27,16 +27,16 @@ class DepthEstimationTrainer(Trainer):
         else:
             logdir = os.path.join(workdir, params.logdir)
         resdir = None
-        if self.datasets['test'] is not None:
+        if datasets['test'] is not None:
             if params.resdir is None:
                 resdir = os.path.join(logdir, '/res')
             else:
                 resdir = os.path.join(logdir, params.resdir)
         # Call the constructor of the parent class (Trainer)
         super().__init__(net, datasets, optimizer, scheduler, criterion,
-                         batch_size=params.b, batch_size_val=params.bval,
+                         batch_size=params.batch, batch_size_val=params.batchval,
                          max_epochs=params.epochs, eval_freq=params.f,
-                         gpus=params.gpus, resume=params.resume, mode=params.mode,
+                         use_gpu=params.gpu, resume=params.resume, mode=params.mode,
                          sets=sets, workdir=workdir, logdir=logdir, resdir=resdir)
         # uncomment to display the model complexity
         stat(self.net, (3, *self.datasets[sets[0]].input_size))
