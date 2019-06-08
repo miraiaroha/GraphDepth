@@ -9,13 +9,12 @@ from tensorboardX import SummaryWriter
 from trainer import Trainer, data_prefetcher
 import torch
 from torch.nn import DataParallel
-from torchstat import stat
 import matplotlib.pyplot as plt
-
+from copy import deepcopy
 
 class DepthEstimationTrainer(Trainer):
     def __init__(self, params, net, datasets, criterion, optimizer, scheduler, 
-                 sets=['train', 'val', 'test'], verbose=50, eval_func=None):
+                 sets=['train', 'val', 'test'], verbose=50, stat=False, eval_func=None):
         self.params = params
         self.verbose = verbose
         self.eval_func = eval_func
@@ -39,8 +38,17 @@ class DepthEstimationTrainer(Trainer):
                          use_gpu=params.gpu, resume=params.resume, mode=params.mode,
                          sets=sets, workdir=workdir, logdir=logdir, resdir=resdir)
         # uncomment to display the model complexity
-        stat(self.net, (3, *self.datasets[sets[0]].input_size))
-        exit()
+        #print(self.net.conv1.__class__.__call__)
+        if stat:
+            from torchstat import stat
+            net_copy = deepcopy(self.net)
+            print(id(self.net), id(net_copy))
+            stat(net_copy, (3, *self.datasets[sets[0]].input_size))
+            #del net_copy
+            #exit()
+        #print(self.net.conv1.__class__.__call__)
+        #print(net_copy.conv1.__class__.__call__)
+        #exit()
 
     def train(self):
         torch.backends.cudnn.benchmark = True
@@ -50,18 +58,17 @@ class DepthEstimationTrainer(Trainer):
             raise Exception("Log dir doesn't exist!")
         # Calculate total step
         self.n_train = len(self.trainset)
-        self.steps_per_epoch = np.ceil(
-            self.n_train / self.batch_size).astype(np.int32)
+        self.steps_per_epoch = np.ceil(self.n_train / self.batch_size).astype(np.int32)
         self.verbose = min(self.verbose, self.steps_per_epoch)
         self.n_steps = self.max_epochs * self.steps_per_epoch
         # calculate model parameters memory
         para = sum([np.prod(list(p.size())) for p in self.net.parameters()])
         memory = para * 4 / (1024**2)
-        self.print('Model {} : params: {:4f}MB'.format(
-            self.net._get_name(), memory))
+        self.print('Model {} : params: {:,}, Memory {:.3f}MB'.format(self.net._get_name(), para, memory))
         self.print('###### Experiment Parameters ######')
-        for k, v in self.params.items():
-            self.print('{0:<22s} : {1:}'.format(k, v))
+        # for k, v in self.params.items():
+        #     self.print('{0:<22s} : {1:}'.format(k, v))
+        self.print(self.params)
         self.print("{0:<22s} : {1:} ".format('trainset sample', self.n_train))
         # GO!!!!!!!!!
         start_time = time.time()
@@ -73,21 +80,19 @@ class DepthEstimationTrainer(Trainer):
             self.writer.add_scalar('lr', self.optimizer.param_groups[0]['lr'], epoch)
             # Train one epoch
             total_loss = self.train_epoch(epoch)
-            self.writer.add_scalar('loss', total_loss, self.global_step)
             torch.cuda.empty_cache()
             # Evaluate the model
             if self.eval_freq and epoch % self.eval_freq == 0:
-                acc = self.eval(epoch)
-                self.writer.add_scalar('acc', acc, epoch)
-        self.print("Finished training! Best epoch {} best acc {:.4f}".format(
-            self.best_epoch, self.best_acc))
-        self.print("Spend time: {:.2f}h".format(
-            (time.time() - start_time) / 3600))
+                measures_str = self.eval(epoch)
+                for k in sorted(list(measures_str.keys())):
+                    self.writer.add_scalar(k, measures_str[k], epoch)
+        self.print("Finished training! Best epoch {} best acc {:.4f}".format(self.best_epoch, self.best_acc))
+        self.print("Spend time: {:.2f}h".format((time.time() - start_time) / 3600))
         return
 
     def train_epoch(self, epoch):
         self.net.train()
-        device = torch.device('cuda:0' if self.gpu else 'cpu')
+        device = torch.device('cuda:0' if self.use_gpu else 'cpu')
         self.net.to(device)
         self.criterion.to(device)
         # Iterate over data.
@@ -102,16 +107,19 @@ class DepthEstimationTrainer(Trainer):
             total_loss = self.criterion(output, labels)
             total_loss.backward()
             self.optimizer.step()
-            fps = image.shape[0] / (time.time() - before_op_time)
+            fps = images.shape[0] / (time.time() - before_op_time)
             time_sofar = self.train_total_time / 3600
             time_left = (self.n_steps / self.global_step - 1.0) * time_sofar
+            lr = self.optimizer.param_groups[0]['lr']
             if self.verbose > 0 and (step + 1) % (self.steps_per_epoch // self.verbose) == 0:
-                print_str = 'Epoch [{:>3}/{:>3}] | Step [{:>3}/{:>3}] | fps {:4.2f} | Loss: {:7.3f} | Time elapsed {:.2f}h | Time left {:.2f}h'. \
-                    format(epoch, self.max_epochs, step + 1, self.steps_per_epoch, fps, total_loss, time_sofar, time_left)
+                print_str = 'Epoch [{:>3}/{:>3}] | Step [{:>3}/{:>3}] | fps {:4.2f} | Loss: {:7.3f} | Time elapsed {:.2f}h | Time left {:.2f}h | lr {:.3e}'. \
+                    format(epoch, self.max_epochs, step + 1, self.steps_per_epoch, fps, total_loss, time_sofar, time_left, lr)
                 self.print(print_str)
+            self.writer.add_scalar('loss', total_loss, self.global_step)
+            self.writer.add_scalar('lr', lr, epoch)
             self.global_step += 1
             self.train_total_time += time.time() - before_op_time
-            image, label = prefetcher.next()
+            images, labels = prefetcher.next()
             step += 1
         return total_loss
 
@@ -132,7 +140,7 @@ class DepthEstimationTrainer(Trainer):
         else:
             if acc >= self.best_acc:
                 self.best_epoch, self.acc = epoch, acc
-        return acc
+        return measures_str
 
     def eval_epoch(self, measure_list):
         device = torch.device('cuda:0' if self.use_gpu else 'cpu')

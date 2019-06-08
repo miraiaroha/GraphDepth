@@ -111,15 +111,15 @@ def make_decoder(decoder='graph 2048 128 1'):
     return dec(*[int(x) for x in command[1:]])
 
 def make_classifier(classifierType='OR', num_classes=80, in_channel=2048):
-    if classifierType == 'CE':
-        channel = num_classes 
+    if classifierType in ['CE', 'OHEM']:
+        out_channel = num_classes 
     elif classifierType == 'OR':
-        channel = 2 * num_classes
+        out_channel = 2 * num_classes
     else:
         raise RuntimeError('classifier not found.' +
                            'The classifier must be either of CE or OR.')
     classifier = nn.Sequential(OrderedDict([
-        ('conv', nn.Conv2d(in_channel, channel, kernel_size=1, stride=1)),
+        ('conv', nn.Conv2d(in_channel, out_channel, kernel_size=1, stride=1)),
         ('upsample', nn.Upsample(scale_factor=8, mode='bilinear', align_corners=True)),
         ]))
     return classifier
@@ -248,7 +248,7 @@ class ResNet(ClassificationModel):
                 raise RuntimeError('classifier not found.' +
                            'The classifier must be either of OR, CE or OHEM.')
 
-        def forward(self, pred_score, label, sim_map, epoch):
+        def forward(self, pred_score, label):
             """
                 Args:
                     pred: [batch, num_classes, h, w]

@@ -117,8 +117,8 @@ class OhemCrossEntropy2d(nn.Module):
                     threshold = pred_[threshold_index]
             kept_flag = pred_ <= threshold
             valid_inds = valid_inds[kept_flag]
-            print('Max prob: {:.4f}, hard ratio: {} = {} / {} '.format(input_prob.max(), round(len(valid_inds) /
-                                                                                               num_valid, 4), len(valid_inds), num_valid))
+            print('Max prob: {:.4f}, hard ratio: {} = {} / {} '.format(
+                input_prob.max(), round(len(valid_inds)/num_valid, 4), len(valid_inds), num_valid))
 
         label = input_label[valid_inds].copy()
         input_label.fill(self.ignore_index)

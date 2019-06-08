@@ -32,13 +32,11 @@ def create_datasets(args):
     else:
         raise RuntimeError('Dataset not found.' +
                            'The dataset must be either of nyu or kitti.')
-
-    if args.mode == 'train':
-        train_dataset = TargetDataset(args.rgbdir, args.depdir, args.trainrgb, args.traindep, args.min_depth, args.max_depth, mode=args.mode)
-    if args.mode in ['train', 'val']:
-        val_dataset = TargetDataset(args.rgbdir, args.depdir, args.valrgb, args.valdep, args.min_depth, args.max_depth, mode=args.mode)
     if args.mode == 'test':
-        test_dataset = TargetDataset(args.rgbdir, args.depdir, args.testrgb, args.testdep, args.min_depth, args.max_depth, mode=args.mode)
+        test_dataset = TargetDataset(args.rgbdir, args.depdir, args.testrgb, args.testdep, args.min_depth, args.max_depth, mode='test')
+    else:
+        train_dataset = TargetDataset(args.rgbdir, args.depdir, args.trainrgb, args.traindep, args.min_depth, args.max_depth, mode='train')
+        val_dataset = TargetDataset(args.rgbdir, args.depdir, args.valrgb, args.valdep, args.min_depth, args.max_depth, mode='val')
     
     print("<= datasets created.")
     datasets = {'train': train_dataset, 'val': val_dataset, 'test': test_dataset}
@@ -94,15 +92,15 @@ def create_params(args, net):
 def create_optimizer(args, optim_params):
     if args.optimizer == 'sgd':
         return optim.SGD(optim_params, args.lr, momentum=args.momentum,
-                         weight_decay=args.weight_decay)
+                         weight_decay=args.wd)
     elif args.optimizer == 'adagrad':
         return optim.Adagrad(optim_params, args.lr, weight_decay=args.weight_decay)
     elif args.optimizer == 'adam':
         return optim.Adam(optim_params, args.lr, betas=(args.beta1, args.beta2),
-                          weight_decay=args.weight_decay)
+                          weight_decay=args.wd)
     elif args.optimizer == 'amsgrad':
         return optim.Adam(optim_params, args.lr, betas=(args.beta1, args.beta2),
-                          weight_decay=args.weight_decay, amsgrad=True)
+                          weight_decay=args.wd, amsgrad=True)
     elif args.optimizer == 'adabound':
         return AdaBound(optim_params, args.lr, betas=(args.beta1, args.beta2),
                         final_lr=args.flr, gamma=args.gamma,
@@ -111,11 +109,11 @@ def create_optimizer(args, optim_params):
         assert args.optimizer == 'amsbound'
         return AdaBound(optim_params, args.lr, betas=(args.beta1, args.beta2),
                         final_lr=args.final_lr, gamma=args.gamma, 
-                        weight_decay=args.weight_decay, amsbound=True)
+                        weight_decay=args.wd, amsbound=True)
 
 def create_scheduler(args, optimizer):
     if args.scheduler == 'step':
-        scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[12], gamma=0.1)
+        scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[28, 45], gamma=0.1)
     elif args.scheduler == 'poly':
         scheduler = lr_scheduler.ExponentialLR(optimizer, gamma=args.lrd)
     return scheduler
@@ -137,9 +135,9 @@ def train(args, net, datasets, criterion, optimizer, scheduler):
         elif args.encoder == 'resnet101':
             resnet = models.resnet101(pretrained=True)
         Trainer.reload(resume=resnet, mode='finetune')
-    if args.mode == 'retain':
+    elif args.mode == 'retain':
         Trainer.reload(resume=args.resume, mode='retain')
-    
+
     Trainer.train()
     return
 
@@ -174,7 +172,7 @@ def main():
 
     if args.mode == 'test':
         test(args, net, datastes, criterion)
-    else:
+    else: # train, retain, finetune
         train(args, net, datastes, criterion, optimizer, scheduler)
 
     

@@ -12,7 +12,7 @@ def make_dataset(root, txt):
         List = []
         for line in f:
             left, right = line.strip('\n')
-            List.append(left)
+            List.append(os.path.join(root, left))
             #List.append(right)
     return List
 
@@ -29,14 +29,14 @@ class KITTIDataset(MyDataloader):
         depth_np = depth / s
         angle = np.random.uniform(-5.0, 5.0)  # random rotation degrees
         do_flip = np.random.uniform(0.0, 1.0) < 0.5  # random horizontal flip
-
+        slide = np.random.uniform(0.0, 1.0)
         # perform 1st step of data augmentation
         transform = transforms.Compose([
             transforms.Crop(130, 10, 240, 1200),
             transforms.Resize(180 / 240), # this is for computational efficiency, since rotation can be slow
             transforms.Rotate(angle),
             transforms.Resize(s),
-            transforms.RandomCrop(self.input_size),
+            transforms.RandomCrop(self.input_size, slide),
             transforms.HorizontalFlip(do_flip)
         ])
         rgb_np = transform(rgb)

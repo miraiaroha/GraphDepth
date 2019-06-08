@@ -73,6 +73,8 @@ def compute_errors(gt, pred):
     Args:
             gt, pred [batch, h, w]
     """
+    safe_log = lambda x: torch.clamp(x, 1e-6, 1e6)
+    safe_log10 = lambda x: torch.clamp(x, 1e-6, 1e6)
     batch_size = pred.shape[0]
     mask = gt > 0
     gt = gt[mask]
@@ -83,8 +85,7 @@ def compute_errors(gt, pred):
     a3 = (thresh < 1.25 ** 3).float().mean() * batch_size
 
     rmse = ((gt - pred) ** 2).mean().sqrt() * batch_size
-    rmse_log = ((safe_log(gt) - safe_log(pred))
-                ** 2).mean().sqrt() * batch_size
+    rmse_log = ((safe_log(gt) - safe_log(pred))** 2).mean().sqrt() * batch_size
     log10 = (safe_log10(gt) - safe_log10(pred)).abs().mean() * batch_size
     abs_rel = ((gt - pred).abs() / gt).mean() * batch_size
     sq_rel = ((gt - pred)**2 / gt).mean() * batch_size
@@ -93,30 +94,6 @@ def compute_errors(gt, pred):
     return measures
 
 
-
-def save_checkpoint(state, is_best, epoch, output_directory):
-    checkpoint_filename = os.path.join(output_directory, 'checkpoint-' + str(epoch) + '.pth.tar')
-    torch.save(state, checkpoint_filename)
-    if is_best:
-        best_filename = os.path.join(output_directory, 'model_best.pth.tar')
-        shutil.copyfile(checkpoint_filename, best_filename)
-    if epoch > 0:
-        prev_checkpoint_filename = os.path.join(output_directory, 'checkpoint-' + str(epoch-1) + '.pth.tar')
-        if os.path.exists(prev_checkpoint_filename):
-            os.remove(prev_checkpoint_filename)
-
-def adjust_learning_rate(optimizer, epoch, lr_init, lr_decay_step):
-    """Sets the learning rate to the initial LR decayed by 10 every 5 epochs"""
-    lr = lr_init * (0.1 ** (epoch // lr_decay_step))
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
-
-def get_output_directory(args):
-    output_directory = os.path.join('results',
-        '{}.samples={}.modality={}.arch={}.criterion={}.lr={}.bs={}'.
-        format(args.data, args.num_samples, args.modality, \
-            args.arch, args.criterion, args.lr, args.batch_size))
-    return output_directory
 
 
 def colored_depthmap(depth, d_min=None, d_max=None):

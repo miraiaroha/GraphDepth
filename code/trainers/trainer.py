@@ -1,6 +1,7 @@
 import os
 import glob
 import torch
+import torch.nn as nn
 import time
 import datetime
 import logging
@@ -35,7 +36,7 @@ class data_prefetcher():
             self.next_data = None
             return
         with torch.cuda.stream(self.stream):
-            self.next_data = self.next_data.cuda(non_blocking=True)
+            self.next_data = [x.cuda(non_blocking=True) for x in self.next_data]
             
     def next(self):
         torch.cuda.current_stream().wait_stream(self.stream)
@@ -72,7 +73,7 @@ class Trainer(object):
         self.best_acc = 0
         self.start_epoch = 1
         self.global_step = 1
-        self.stats = {}
+        #self.stats = {}
         # Dataloader
         self.trainset = self.datasets[self.sets[0]]
         self.trainloader = DataLoader(self.trainset, self.batch_size,
@@ -116,8 +117,7 @@ class Trainer(object):
         # calculate model parameters memory
         para = sum([np.prod(list(p.size())) for p in self.net.parameters()])
         memory = para * 4 / 1000 / 1000
-        self.print('Model {} : params: {:4f}M'.format(
-            self.net._get_name(), memory))
+        self.print('Model {} : params: {:4f}M'.format(self.net._get_name(), memory))
         self.print('###### Experiment Parameters ######')
         for k, v in self.params.items():
             self.print('{0:<22s} : {1:}'.format(k, v))
@@ -135,10 +135,8 @@ class Trainer(object):
             # Evaluate the model
             if self.eval_freq and epoch % self.eval_freq == 0:
                 acc = self.eval(epoch)
-        self.print("Finished training! Best epoch {} best acc {}".format(
-            self.best_epoch, self.best_acc))
-        self.print("Spend time: {:.2f}h".format(
-            (time.time() - start_time) / 3600))
+        self.print("Finished training! Best epoch {} best acc {}".format(self.best_epoch, self.best_acc))
+        self.print("Spend time: {:.2f}h".format((time.time() - start_time) / 3600))
 
     def train_epoch(self, epoch):
         """Train one epoch, you can overload this function according to your need."""
@@ -214,7 +212,6 @@ class Trainer(object):
             'net': self.net.state_dict(),
             'optimizer': self.optimizer.state_dict(),
             'scheduler': self.scheduler.state_dict(),
-            'stats': self.stats,
             'use_gpu': self.use_gpu,
             'save_time': datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
         }
@@ -227,9 +224,9 @@ class Trainer(object):
             self.best_epoch = epoch
             self.best_acc = acc
 
-    def reload(self, resume, finetune=False):
+    def reload(self, resume, mode='finetune'):
         if resume:
-            if self.load_checkpoint(resume, finetune):
+            if self.load_checkpoint(resume, mode):
                 self.print('Checkpoint was loaded successfully!')
         else:
             raise Exception("Resume doesn't exist!")
@@ -250,13 +247,12 @@ class Trainer(object):
         """
         net_type = type(self.net).__name__
         if isinstance(checkpoint, nn.Module):
-            old_net = checkpoint
+            old_model_dict = checkpoint.state_dict()
         else:
             if isinstance(checkpoint, int):
                 # Checkpoint is the epoch number
                 if self.logdir is not None:
-                    checkpoint_path = os.path.join(
-                        self.logdir, '{}_{:03d}.pkl'.format(net_type, checkpoint))
+                    checkpoint_path = os.path.join(self.logdir, '{}_{:03d}.pkl'.format(net_type, checkpoint))
                 else:
                     raise Exception("Log dir doesn't exist!")
             elif isinstance(checkpoint, str):
@@ -264,31 +260,32 @@ class Trainer(object):
                 checkpoint_path = os.path.expanduser(checkpoint)
                 raise TypeError
             checkpoint_dict = torch.load(checkpoint_path, map_location={'cuda:1': 'cuda:0'})
-            old_net = checkpoint_dict['net']
+            old_model_dict = checkpoint_dict['net']
         #assert net_type == checkpoint_dict['net_type'], 'Network is not of correct type.'
         if mode == 'finetune':
             net_state_dict = self.net.state_dict()
-            new_model_dict = {key: value for key, value in old_net.items()
+            new_model_dict = {key: value for key, value in old_model_dict.items()
                               if key in net_state_dict and value.shape == net_state_dict[key].shape}
             net_state_dict.update(new_model_dict)
             start_epoch = 1
             best_acc = 0
+            use_gpu = self.use_gpu
         elif mode == 'retain':
             net_state_dict = checkpoint_dict['net']
             start_epoch = checkpoint_dict['epoch'] + 1
             best_acc = checkpoint_dict['acc']
             self.optimizer.load_state_dict(checkpoint_dict['optimizer'])
             if 'scheduler' in checkpoint_dict:
-                self.scheduler.load_state_dict(
-                    checkpoint_dict['scheduler'])
+                self.scheduler.load_state_dict(checkpoint_dict['scheduler'])
                 self.scheduler.last_epoch = start_epoch - 1
+            use_gpu = checkpoint_dict['use_gpu']
         elif mode == 'test':
             net_state_dict = checkpoint_dict['net']
+            use_gpu = checkpoint_dict['use_gpu']
         self.start_epoch = start_epoch
         self.best_acc = best_acc
         self.net.load_state_dict(net_state_dict)
-        self.stats = checkpoint_dict['stats']
-        self.use_gpu = checkpoint_dict['use_gpu']
+        self.use_gpu = use_gpu
         return True
 
 

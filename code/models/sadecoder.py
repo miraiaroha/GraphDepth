@@ -49,8 +49,7 @@ class PixelAttentionBlock_(nn.Module):
         if scale > 1:
             self.pool = nn.MaxPool2d(kernel_size=(scale, scale))
         self.f_value = nn.Sequential(
-            nn.Conv2d(in_channels, value_channels,
-                      kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(in_channels, value_channels, kernel_size=3, stride=1, padding=1),
             nn.ReLU(inplace=True),
             nn.Conv2d(value_channels, value_channels, kernel_size=1, stride=1),
             nn.ReLU(inplace=True)
@@ -73,8 +72,7 @@ class PixelAttentionBlock_(nn.Module):
         if self.scale > 1:
             x = self.pool(x)
         sim_map = self.pixel_att(x)
-        value = self.f_value(x).view(
-            batch_size, self.value_channels, -1).permute(0, 2, 1)
+        value = self.f_value(x).view(batch_size, self.value_channels, -1).permute(0, 2, 1)
         context = torch.matmul(sim_map, value).permute(0, 2, 1).contiguous()
         context = context.view(batch_size, self.value_channels, *x.size()[2:])
         if self.scale > 1:
@@ -97,7 +95,7 @@ class SADecoder(nn.Module):
 
     def forward(self, x):
         x1 = self.conv(x)
-        x2 = self.saconv(x)
+        x2, sim_map = self.saconv(x)
         x = torch.cat((x1, x2), 1)
         x = self.merge(x)
         return x
