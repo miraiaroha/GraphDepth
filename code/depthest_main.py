@@ -2,12 +2,15 @@ import os
 import sys
 import argparse
 import json
-
+from functools import wraps
 import numpy as np
+import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 from adabound import AdaBound
+import torchvision
 import torchvision.models as models
 from torch.optim import lr_scheduler
 
@@ -111,13 +114,17 @@ def create_optimizer(args, optim_params):
                         final_lr=args.final_lr, gamma=args.gamma, 
                         weight_decay=args.wd, amsbound=True)
 
-def create_scheduler(args, optimizer):
+
+def create_scheduler(args, optimizer, datasets):
     if args.scheduler == 'step':
         scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[28, 45], gamma=0.1)
     elif args.scheduler == 'poly':
-        scheduler = lr_scheduler.ExponentialLR(optimizer, gamma=args.lrd)
+        total_step = len(datasets['train']) / args.batch * args.epochs
+        scheduler = lr_scheduler.LambdaLR(optimizer, lambda x: (1-x/total_step) ** 0.9)
+    elif args.scheduler == 'plateau':
+        scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.1, patience=5)
     return scheduler
-    
+     
 def train(args, net, datasets, criterion, optimizer, scheduler):
     # Define trainer
     Trainer = DepthEstimationTrainer(params=args,
@@ -128,6 +135,7 @@ def train(args, net, datasets, criterion, optimizer, scheduler):
                                      scheduler=scheduler,
                                      sets=list(datasets.keys()),
                                      eval_func=compute_errors,
+                                     disp_func=display_figure
                                      )
     if args.mode == 'finetune':
         if args.encoder == 'resnet50':
@@ -139,6 +147,48 @@ def train(args, net, datasets, criterion, optimizer, scheduler):
         Trainer.reload(resume=args.resume, mode='retain')
 
     Trainer.train()
+    return
+
+def imshow(img, height, width, mode='image'):
+    _, _, h, w = img.shape
+    img = torchvision.utils.make_grid(img, nrow=width)
+    npimg = img.cpu().numpy() if img.is_cuda else img.numpy()
+    fig = plt.figure(figsize=(w // 80 * width, h // 50 * height))
+    if mode == 'image':
+        plt.imshow(np.transpose(npimg, (1, 2, 0)))
+    elif mode == 'depth':
+        plt.imshow(npimg[0], cmap='plasma')
+    else:
+        plt.imshow(npimg[0], cmap='hot')
+    return fig
+
+def display_figure(params, writer, net, images, labels, depths, epoch):
+    # display image figure
+    b, c, h, w = images.shape
+    images = F.interpolate(images, size=(h // 2, w // 2), mode='bilinear', align_corners=True)
+    fig1 = imshow(images, height=1, width=b, mode='image')
+    del images
+    writer.add_figure('figure1-images', fig1, epoch)
+    # display gt and pred figure
+    labels = F.interpolate(labels, size=(h // 2, w // 2), mode='nearest')
+    depths = F.interpolate(depths, size=(h // 2, w // 2), mode='nearest')
+    fuse = torch.cat((labels, depths), 0)
+    fig2 = imshow(fuse, height=2, width=b, mode='depth')
+    del fuse, labels, depths
+    writer.add_figure('figure2-depths', fig2, epoch)
+    # display similarity figure
+    if params.decoder in ['attention']:
+        sim_map = net.decoder.get_sim_map().cpu()
+        N = sim_map.shape[1]
+        points = [N // 4, N // 2, 3 * N // 4]
+        sim_pixels = sim_map[:, points]
+        sim_pixels = sim_pixels.reshape((b, len(points), h//8, w//8))
+        sim_pixels = sim_pixels.permute((1, 0, 2, 3))
+        sim_pixels = sim_pixels.reshape((-1, 1, h//8, w//8))
+        sim_pixels = F.interpolate(sim_pixels, size=(h // 2, w // 2), mode='bilinear', align_corners=True)
+        fig3 = imshow(sim_pixels, height=2, width=b, mode='sim_map')
+        writer.add_figure('figure3-pixel_attentions', fig3, epoch)
+        del sim_map, sim_pixels
     return
 
 def test(args, net, datasets, criterion):
@@ -159,7 +209,7 @@ def test(args, net, datasets, criterion):
 def main():
     args = load_params_from_parser()
     # Dataset
-    datastes = create_datasets(args)
+    datasets = create_datasets(args)
     # Network
     net = create_network(args)
     # Loss Function
@@ -168,12 +218,11 @@ def main():
     optim_params = create_params(args, net)
     optimizer = create_optimizer(args, optim_params)
     # learning rate scheduler
-    scheduler = create_scheduler(args, optimizer)
-
+    scheduler = create_scheduler(args, optimizer, datasets)
     if args.mode == 'test':
-        test(args, net, datastes, criterion)
+        test(args, net, datasets, criterion)
     else: # train, retain, finetune
-        train(args, net, datastes, criterion, optimizer, scheduler)
+        train(args, net, datasets, criterion, optimizer, scheduler)
 
     
 if __name__ == '__main__':

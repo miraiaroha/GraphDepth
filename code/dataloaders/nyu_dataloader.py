@@ -6,6 +6,7 @@ import transforms as transforms
 from dataloader import MyDataloader
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
+import torch
 
 iheight, iwidth = 480, 640 # raw image size
 
@@ -57,26 +58,33 @@ class NYUDataset(MyDataloader):
 
         return rgb_np, depth_np
 
-
 if __name__ == '__main__':
-    rgbdir = '/home/lilium/myDataset/NYU_v2/'
-    depdir = '/home/lilium/myDataset/NYU_v2/'
+    HOME = os.environ['HOME']
+    rgbdir = HOME + '/myDataset/NYU_v2/'
+    depdir = HOME + '/myDataset/NYU_v2/'
     trainrgb = '../datasets/nyu_path/train_rgb_12k.txt'
     traindep = '../datasets/nyu_path/train_depth_12k.txt'
+    valrgb = '../datasets/nyu_path/valid_rgb.txt'
+    valdep = '../datasets/nyu_path/valid_depth.txt'
     train_dataset = NYUDataset(rgbdir, depdir, trainrgb, traindep, 0.65, 10, mode='train')
+    val_dataset = NYUDataset(rgbdir, depdir, valrgb, valdep, 0.65, 10, mode='val')
     trainloader = DataLoader(train_dataset, 20,
                                 shuffle=True, num_workers=4, 
                                 pin_memory=True, drop_last=False)
-    image, label = train_dataset[0]
+    valloader = DataLoader(val_dataset, 20,
+                                shuffle=True, num_workers=4, 
+                                pin_memory=True, drop_last=False)
+    image, label = train_dataset[2000]
     image_npy = image.numpy().transpose(1, 2, 0)
     label_npy = label.numpy().squeeze()
 
-    trainloader = iter(trainloader)
-    image, label = next(trainloader)
+    #trainloader = iter(trainloader)
+    #image, label = next(trainloader)
     print(image.shape, label.shape)
+    print(label.max())
     plt.figure()
     plt.subplot(1, 2, 1)
     plt.imshow(image_npy)
     plt.subplot(1, 2, 2)
-    plt.imshow(label_npy, cmap='plasma')
+    plt.imshow(label_npy, cmap='jet')
     plt.show()

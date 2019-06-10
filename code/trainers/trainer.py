@@ -5,14 +5,17 @@ import torch.nn as nn
 import time
 import datetime
 import logging
+import json
 import numpy as np
 from torch.utils.data import DataLoader
 
-def init_log(output_dir):
-    logging.basicConfig(level=logging.DEBUG,
-                        format='%(asctime)s %(message)s',
+
+
+def init_log(output_dir, time):
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s-%(filename)s[l:%(lineno)d]: %(message)s',
                         datefmt='%Y%m%d-%H:%M:%S',
-                        filename=os.path.join(output_dir, 'log.log'),
+                        filename=os.path.join(output_dir, 'log_{}.log'.format(time)),
                         filemode='a')
     console = logging.StreamHandler()
     console.setLevel(logging.INFO)
@@ -35,6 +38,9 @@ class data_prefetcher():
         except StopIteration:
             self.next_data = None
             return
+        except TypeError:
+            self.next_data = None
+            return
         with torch.cuda.stream(self.stream):
             self.next_data = [x.cuda(non_blocking=True) for x in self.next_data]
             
@@ -50,7 +56,7 @@ class Trainer(object):
     Trainer classes should inherit from this one and overload the train_epoch function."""
 
     def __init__(self, net, datasets, optimizer, scheduler, criterion,
-                 batch_size, batch_size_val, max_epochs, eval_freq,
+                 batch_size, batch_size_val, max_epochs, threads, eval_freq,
                  use_gpu, resume, mode, sets, workdir, logdir, resdir):
         self.net = net
         self.datasets = datasets
@@ -60,6 +66,7 @@ class Trainer(object):
         self.batch_size = batch_size
         self.batch_size_val = batch_size_val
         self.max_epochs = max_epochs
+        self.threads = threads
         self.eval_freq = eval_freq  # use 0 to disable test during training
         self.use_gpu = use_gpu
         self.resume = resume
@@ -77,12 +84,12 @@ class Trainer(object):
         # Dataloader
         self.trainset = self.datasets[self.sets[0]]
         self.trainloader = DataLoader(self.trainset, self.batch_size,
-                                      shuffle=True, num_workers=2, 
+                                      shuffle=True, num_workers=self.threads, 
                                       pin_memory=True, drop_last=False,
                                       worker_init_fn=lambda work_id:np.random.seed(work_id))
         self.valset = self.datasets[self.sets[1]]
         self.valloader = DataLoader(self.valset, self.batch_size_val,
-                                      shuffle=False, num_workers=4, 
+                                      shuffle=False, num_workers=self.threads, 
                                       pin_memory=Trainer, drop_last=False,
                                       worker_init_fn=lambda work_id:np.random.seed(work_id))
         if 'test' in self.sets and self.datasets['test'] is not None:
@@ -97,8 +104,11 @@ class Trainer(object):
         if self.logdir is not None:
             if not os.path.exists(self.logdir):
                 os.mkdir(self.logdir)
-            logging = init_log(self.logdir)
+            time = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+            logging = init_log(self.logdir, time)
             self.print = logging.info
+            with open(os.path.join(self.logdir, 'params_{}.json'.format(time)), 'w') as f:
+                json.dump(vars(self.params), f)
         else:
             self.print = print
         if self.resdir is not None:
@@ -193,52 +203,54 @@ class Trainer(object):
         if self.eval_freq:
             raise NotImplementedError
 
-    def save_checkpoint(self, epoch, acc):
+    def save(self, epoch, acc):
+        self._save_checkpoint(epoch, acc)
+        self.print('=> Checkpoint was saved successfully!')
+
+    def _save_checkpoint(self, epoch, acc):
         """Saves a checkpoint of the network and other variables.
            Only save the best and latest epoch.
         """
         net_type = type(self.net).__name__
         if epoch - self.eval_freq != self.best_epoch:
-            pre_save = os.path.join(self.logdir, '{}_{:03d}.pkl'.format(
-                net_type, epoch - self.eval_freq))
+            pre_save = os.path.join(self.logdir, '{}_{:03d}.pkl'.format(net_type, epoch - self.eval_freq))
             if os.path.isfile(pre_save):
                 os.remove(pre_save)
-        cur_save = os.path.join(
-            self.logdir, '{}_{:03d}.pkl'.format(net_type, epoch))
+        cur_save = os.path.join(self.logdir, '{}_{:03d}.pkl'.format(net_type, epoch))
         state = {
             'epoch': epoch,
             'acc': acc,
             'net_type': net_type,
             'net': self.net.state_dict(),
             'optimizer': self.optimizer.state_dict(),
-            'scheduler': self.scheduler.state_dict(),
+            #'scheduler': self.scheduler.state_dict(),
             'use_gpu': self.use_gpu,
             'save_time': datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
         }
         torch.save(state, cur_save)
         if acc >= self.best_acc:
-            last_best = os.path.join(
-                self.logdir, '{}_{:03d}.pkl'.format(net_type, self.best_epoch))
+            last_best = os.path.join(self.logdir, '{}_{:03d}.pkl'.format(net_type, self.best_epoch))
             if os.path.isfile(last_best):
                 os.remove(last_best)
             self.best_epoch = epoch
             self.best_acc = acc
+        return True
 
     def reload(self, resume, mode='finetune'):
         if resume:
-            if self.load_checkpoint(resume, mode):
+            if self._load_checkpoint(resume, mode):
                 self.print('Checkpoint was loaded successfully!')
         else:
             raise Exception("Resume doesn't exist!")
 
-    def load_checkpoint(self, checkpoint=None, mode='finetune'):
+    def _load_checkpoint(self, checkpoint=None, mode='finetune'):
         """checkpoint:
                 Loads a network checkpoint file. Can be called in three different ways:
-                    load_checkpoint(epoch_num):
+                    _load_checkpoint(epoch_num):
                         Loads the network at the given epoch number (int).
-                    load_checkpoint(path_to_checkpoint):
+                    _load_checkpoint(path_to_checkpoint):
                         Loads the file from the given absolute path (str).
-                    load_checkpoint(net):
+                    _load_checkpoint(net):
                         Loads the parameters from the given net (nn.Module).
             mode:
                 'fintune': load the pretrained model and start training from epoch 1,

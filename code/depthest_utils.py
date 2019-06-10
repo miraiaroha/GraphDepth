@@ -16,7 +16,7 @@ def load_params_from_parser():
     inference_type = ['hard', 'soft']
     loss_names = ['l1', 'l2']
     opt_names = ['sgd', 'adam', 'adagrad', 'amsgrad', 'adabound', 'amsbound']
-    sch_names = ['step', 'poly']
+    sch_names = ['step', 'poly', 'plateau']
     dataset_names = ['nyu', 'kitti']
 
     parser = argparse.ArgumentParser(description='GraphDepth Pytorch Implementation.')
@@ -56,7 +56,7 @@ def load_params_from_parser():
     parser.add_argument('--classes',                       type=int,   help='number of discrete classes of detph (default: 80)', default=80)
     parser.add_argument('--eval-freq', '-f', dest='f',     type=int,   help='number of evaluation interval during training (default: 1)', default=1)
     parser.add_argument('--workdir',                       type=str,   help='directory for storing training files', default='../workdir/')
-    parser.add_argument('--logdir',                        type=str,   help='subdir of workdir, storing checkpoint and logfile (style: log_net_dataset_exp)')
+    parser.add_argument('--logdir',                        type=str,   help='subdir of workdir, storing checkpoint and logfile (style: LOG_net_dataset_exp)')
     parser.add_argument('--resdir',                        type=str,   help='subdir of logdir, storing predicted results (default: res)', default='res')
     parser.add_argument('--resume',                                    help='reloaded checkpoint, absolute path (str), given epoch number (int) or nn.Module class')
 

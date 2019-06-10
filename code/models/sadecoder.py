@@ -93,9 +93,13 @@ class SADecoder(nn.Module):
             nn.Dropout2d(0.5, inplace=False),
         )
 
+    def get_sim_map(self):
+        return self.sim_map
+
     def forward(self, x):
         x1 = self.conv(x)
         x2, sim_map = self.saconv(x)
+        self.sim_map = sim_map
         x = torch.cat((x1, x2), 1)
         x = self.merge(x)
         return x
