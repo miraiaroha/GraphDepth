@@ -4,6 +4,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
+safe_log = lambda x: torch.log(torch.clamp(x, 1e-8, 1e8))
+
 class OrdinalRegression2d(nn.Module):
     def __init__(self, ignore_index=0):
         super(OrdinalRegression2d, self).__init__()
@@ -11,9 +13,6 @@ class OrdinalRegression2d(nn.Module):
         # self.target_index = list(np.arange(num_classes))
         # if ignore_index is not None:
         #     self.target_index.remove(ignore_index)
-
-    def safe_log(self, x):
-        return torch.log(torch.clamp(x, 1e-8, 1e8))
 
     def forward(self, pred, label):
         """
@@ -32,8 +31,7 @@ class OrdinalRegression2d(nn.Module):
         mask01 = (torch.arange(c)).cuda() >= label
         mask10 = mask10.float()
         mask01 = mask01.float()
-        entropy = self.safe_log(pred) * mask10 + \
-            self.safe_log(1 - pred) * mask01
+        entropy = safe_log(pred) * mask10 + safe_log(1 - pred) * mask01
         pixel_loss = -torch.sum(entropy, -1)
         masked_pixel_loss = pixel_loss * mask
         total_loss = torch.sum(masked_pixel_loss) / mask.sum()
@@ -44,9 +42,6 @@ class CrossEntropy2d(nn.Module):
     def __init__(self, ignore_index=None):
         super(CrossEntropy2d, self).__init__()
         self.ignore_index = ignore_index
-
-    def safe_log(self, x):
-        return torch.log(torch.clamp(x, 1e-8, 1e8))
 
     def forward(self, pred, label):
         """
@@ -63,8 +58,7 @@ class CrossEntropy2d(nn.Module):
         pred = F.softmax(pred, 1).permute(0, 2, 3, 1)
         one_hot_label = (torch.arange(c)).cuda() == label
         one_hot_label = one_hot_label.float()
-        entropy = one_hot_label * self.safe_log(pred) + \
-            (1 - one_hot_label) * self.safe_log(1 - pred)
+        entropy = one_hot_label * safe_log(pred) + (1 - one_hot_label) * safe_log(1 - pred)
         pixel_loss = - torch.sum(entropy, -1)
         masked_pixel_loss = pixel_loss * mask
         total_loss = torch.sum(masked_pixel_loss) / mask.sum()

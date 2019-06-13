@@ -108,7 +108,7 @@ class DepthEstimationTrainer(Trainer):
             before_op_time = time.time()
             self.optimizer.zero_grad()
             output = self.net(images)
-            total_loss = self.criterion(output, labels)
+            total_loss = self.criterion(output, labels.squeeze())
             total_loss.backward()
             self.optimizer.step()
             fps = images.shape[0] / (time.time() - before_op_time)
