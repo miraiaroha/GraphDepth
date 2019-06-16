@@ -9,20 +9,18 @@ import json
 import numpy as np
 from torch.utils.data import DataLoader
 
-
-
-def init_log(output_dir, time):
+def init_log(output_dir, time, mode='train'):
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s-%(filename)s[l:%(lineno)d]: %(message)s',
                         datefmt='%Y%m%d-%H:%M:%S',
-                        filename=os.path.join(output_dir, 'log_{}.log'.format(time)),
+                        filename=os.path.join(output_dir, '{}_log_{}.log'.format(mode, time)),
                         filemode='a')
     console = logging.StreamHandler()
     console.setLevel(logging.INFO)
     logging.getLogger('').addHandler(console)
     return logging
 
-class data_prefetcher():
+class DataPrefetcher():
     """
        direct to: 
        https://github.com/NVIDIA/apex/blob/f5cd5ae937f168c763985f627bbf850648ea5f3f/examples/imagenet/main_amp.py#L256
@@ -82,35 +80,43 @@ class Trainer(object):
         self.global_step = 1
         #self.stats = {}
         # Dataloader
-        self.trainset = self.datasets[self.sets[0]]
-        self.trainloader = DataLoader(self.trainset, self.batch_size,
+        if 'train' in self.sets and self.datasets['train'] is not None:
+            self.trainset = self.datasets[self.sets[0]]
+            self.trainloader = DataLoader(self.trainset, self.batch_size,
                                       shuffle=True, num_workers=self.threads, 
                                       pin_memory=True, drop_last=False,
                                       worker_init_fn=lambda work_id:np.random.seed(work_id))
-        self.valset = self.datasets[self.sets[1]]
-        self.valloader = DataLoader(self.valset, self.batch_size_val,
+        if 'train' in self.sets and self.datasets['val'] is not None:        
+            self.valset = self.datasets[self.sets[1]]
+            self.valloader = DataLoader(self.valset, self.batch_size_val,
                                       shuffle=False, num_workers=self.threads, 
                                       pin_memory=Trainer, drop_last=False,
                                       worker_init_fn=lambda work_id:np.random.seed(work_id))
+        else:
+            raise Exception("Val set not found!")
         if 'test' in self.sets and self.datasets['test'] is not None:
             self.testset = self.datasets[self.sets[2]]
             self.testloader = DataLoader(self.testset, 1, shuffle=False)
-        # Workspace and log dir
+        # Workspace dir
         if self.workdir is not None:
             if not os.path.exists(self.workdir):
                 os.makedirs(self.workdir)
         else:
             raise Exception("Workspace directory doesn't exist!")
+        # log dir
         if self.logdir is not None:
             if not os.path.exists(self.logdir):
                 os.mkdir(self.logdir)
             time = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-            logging = init_log(self.logdir, time)
+            logging = init_log(self.logdir, time, self.params.mode)
             self.print = logging.info
-            with open(os.path.join(self.logdir, 'params_{}.json'.format(time)), 'w') as f:
-                json.dump(vars(self.params), f)
         else:
             self.print = print
+        # params json
+        if self.params.mode == 'train':
+            with open(os.path.join(self.logdir, 'params_{}.json'.format(time)), 'w') as f:
+                json.dump(vars(self.params), f)
+        # result dir
         if self.resdir is not None:
             if not os.path.exists(self.resdir):
                 os.makedirs(self.resdir)
@@ -155,7 +161,7 @@ class Trainer(object):
         self.criterion.to(device)
         self.net.train()
         # Iterate over data.
-        prefetcher = data_prefetcher(self.trainloader)
+        prefetcher = DataPrefetcher(self.trainloader)
         image, label = prefetcher.next()
         step = 0
         while image is not None:

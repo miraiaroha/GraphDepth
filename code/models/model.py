@@ -1,15 +1,19 @@
+##+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+## Created by: chenyuru
+## This source code is licensed under the MIT-style license
+##+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 import os
 import sys
-sys.path.append(os.path.dirname(__file__))
+#sys.path.append(os.path.dirname(__file__))
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 from collections import OrderedDict
-from gcdecoder import GCDecoder
-from sadecoder import SADecoder
-from losses import OrdinalRegression2d, CrossEntropy2d, OhemCrossEntropy2d
+from .sadecoder import SADecoder
+from .gcdecoder import GCDecoder
+from .losses import OrdinalRegression2d, CrossEntropy2d, OhemCrossEntropy2d
 
 def continuous2discrete(continuous_depth, Min, Max, num_classes):
     if continuous_depth.is_cuda:

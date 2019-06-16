@@ -1,9 +1,14 @@
+##+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+## Created by: chenyuru
+## This source code is licensed under the MIT-style license
+##+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
 import os
 import sys
-sys.path.append(os.path.dirname(__file__))
+#sys.path.append(os.path.dirname(__file__))
 import numpy as np
 import torch.utils.data as data
-import transforms
+from .transforms import ToTensor
 from PIL import Image
 
 def img_loader(path, is_rgb=True):
@@ -17,14 +22,14 @@ def img_loader(path, is_rgb=True):
 # def rgb2grayscale(rgb):
 #     return rgb[:,:,0] * 0.2989 + rgb[:,:,1] * 0.587 + rgb[:,:,2] * 0.114
 
-to_tensor = transforms.ToTensor()
+to_tensor = ToTensor()
 
 class MyDataloader(data.Dataset):
 
     def __init__(self, root_image, root_depth, 
                        image_txt, depth_txt, 
-                       min_depth, max_depth,
-                       mode, make, loader=img_loader):
+                       mode, min_depth, max_depth,
+                       make, loader=img_loader):
         self.min_depth = min_depth
         self.max_depth = max_depth
         self.images = make(root_image, image_txt)

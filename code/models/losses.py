@@ -1,3 +1,7 @@
+##+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+## Created by: chenyuru
+## This source code is licensed under the MIT-style license
+##+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 import numpy as np
 import torch
 import torch.nn as nn

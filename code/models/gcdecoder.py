@@ -1,3 +1,7 @@
+##+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+## Created by: chenyuru
+## This source code is licensed under the MIT-style license
+##+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -7,7 +11,7 @@ from collections import OrderedDict
 class GraphConvBlock_(nn.Module):
     def __init__(self, node, channel):
         super(GraphConvBlock_, self).__init__()
-        self.Ag = Parameter(torch.rand(node, node))
+        self.Ag = Parameter(torch.ones(node, node) / node)
         self.conv1 = nn.Conv1d(node, node, kernel_size=1, stride=1, padding=0)
         self.conv2 = nn.Conv1d(channel, channel, kernel_size=1, stride=1, padding=0)
         
@@ -39,7 +43,7 @@ class GloRe2d(nn.Module):
     def get_map(self):
         map_list = [self.B]
         for i in range(self.n):
-            map_list.append(self.GraphConvs[i].get_adjacent_matrix())
+            map_list.append(self.GraphConvs[i].get_adjecent_matrix())
         return map_list
 
     def forward(self, x):

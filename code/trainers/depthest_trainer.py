@@ -1,21 +1,29 @@
+##+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+## Created by: chenyuru
+## This source code is licensed under the MIT-style license
+##+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 import os
 import sys
 import time
 import datetime
 import numpy as np
 import scipy.io
-sys.path.append(os.path.dirname(__file__))
+import shutil
 from tensorboardX import SummaryWriter
-from trainer import Trainer, data_prefetcher
+from .trainer import Trainer, DataPrefetcher
+from ..utils import predict_multi_scale, predict_whole_img, compute_errors, \
+                    display_figure, colored_depthmap, merge_images
 import torch
 from torch.nn import DataParallel
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 from copy import deepcopy
 
 class DepthEstimationTrainer(Trainer):
     def __init__(self, params, net, datasets, criterion, optimizer, scheduler, 
                  sets=['train', 'val', 'test'], verbose=50, stat=False, 
-                 eval_func=None, disp_func=None):
+                 eval_func=compute_errors, 
+                 disp_func=display_figure):
         self.params = params
         self.verbose = verbose
         self.eval_func = eval_func
@@ -43,17 +51,14 @@ class DepthEstimationTrainer(Trainer):
                          use_gpu=params.gpu, resume=params.resume, mode=params.mode,
                          sets=sets, workdir=workdir, logdir=logdir, resdir=resdir)
         # uncomment to display the model complexity
-        #print(self.net.conv1.__class__.__call__)
         if stat:
             from torchstat import stat
-            net_copy = deepcopy(self.net)
-            print(id(self.net), id(net_copy))
-            stat(net_copy, (3, *self.datasets[sets[0]].input_size))
+            import tensorwatch as tw
+            #net_copy = deepcopy(self.net)
+            #stat(net_copy, (3, *self.datasets[sets[0]].input_size))
+            tw.draw_model(self.net, (1, 3, *self.datasets[sets[0]].input_size))
             #del net_copy
             #exit()
-        #print(self.net.conv1.__class__.__call__)
-        #print(net_copy.conv1.__class__.__call__)
-        #exit()
 
     def train(self):
         torch.backends.cudnn.benchmark = True
@@ -92,6 +97,9 @@ class DepthEstimationTrainer(Trainer):
                     self.writer.add_scalar(k, measures[k], epoch)
         self.print("Finished training! Best epoch {} best acc {:.4f}".format(self.best_epoch, self.best_acc))
         self.print("Spend time: {:.2f}h".format((time.time() - start_time) / 3600))
+        best_pkl = os.path.join(self.logdir, '{}_{:03d}.pkl'.format(net_type, self.best_epoch))
+        modify = os.path.join(self.logdir, '{}_best.pkl'.format(net_type))
+        shutil.copyfile(best_pkl, modify)
         return
 
     def train_epoch(self, epoch):
@@ -100,7 +108,7 @@ class DepthEstimationTrainer(Trainer):
         self.net.to(device)
         self.criterion.to(device)
         # Iterate over data.
-        prefetcher = data_prefetcher(self.trainloader)
+        prefetcher = DataPrefetcher(self.trainloader)
         data = prefetcher.next()
         step = 0
         while data is not None:
@@ -157,7 +165,9 @@ class DepthEstimationTrainer(Trainer):
         measure_list = ['a1', 'a2', 'a3', 'rmse', 'rmse_log', 'log10', 'abs_rel', 'sq_rel']
         measures = dict(zip(measure_list, np.zeros(len(measure_list))))
         with torch.no_grad():
-            prefetcher = data_prefetcher(self.valloader)
+            sys.stdout.flush()
+            tbar = tqdm(self.valloader)
+            prefetcher = DataPrefetcher(tbar)
             data = prefetcher.next()
             step = 0
             while data is not None:
@@ -175,42 +185,59 @@ class DepthEstimationTrainer(Trainer):
                 # display images
                 if step == 10 and self.disp_func is not None:
                     self.disp_func(self.params, self.writer, self.net, images, labels, depths, epoch)
-                print('Test step [{}/{}].'.format(step + 1, len(self.valloader)))
+                print_str = 'Test step [{}/{}].'.format(step + 1, len(self.valloader))
+                tbar.set_description(print_str)
                 data = prefetcher.next()
                 step += 1
-        
         fps = self.n_val / val_total_time
         return measures, fps
 
     def test(self):
         torch.backends.cudnn.benchmark = True
         n_test = len(self.testset)
+        for k, v in vars(self.params).items():
+            self.print('{0:<22s} : {1:}'.format(k, v))
+        self.print("{0:<22s} : {1:} ".format('testset sample', n_test))
         device = torch.device('cuda:0' if self.use_gpu else 'cpu')
         self.net.to(device)
         self.net.eval()
-        print("<-------------Test the model-------------->")
+        self.print("<-------------Test the model-------------->")
         colormap = {'nyu': 'jet', 'kitti': 'plasma'}
         measure_list = ['a1', 'a2', 'a3', 'rmse', 'rmse_log', 'log10', 'abs_rel', 'sq_rel']
         measures = {key: 0 for key in measure_list}
         test_total_time = 0
         with torch.no_grad():
-            prefetcher = data_prefetcher(self.testloader)
+            sys.stdout.flush()
+            tbar = tqdm(self.valloader)
+            prefetcher = DataPrefetcher(tbar)
             data = prefetcher.next()
             step = 0
             while data is not None:
                 images, labels = data[0].to(device), data[1].to(device)
-                # forward
                 before_op_time = time.time()
-                output = self.net(images)
+                if self.params.use_ms == 'True': 
+                    output = predict_multi_scale(self.net, images.numpy(), ([0.75, 1, 1.25]), 
+                        self.params.classes, args.use_flip)
+                else:
+                    output = predict_multi_scale(self.net, images.numpy(), [1], 
+                        self.params.classes, args.use_flip)
+                # forward
                 depths = self.net.inference(output)
                 duration = time.time() - before_op_time
                 test_total_time += duration
                 # accuracy
                 new = self.eval_func(labels, depths)
-                print("Test step [{}/{}].".format(step + 1, n_test))
-                images = np.transpose(images.cpu().numpy().squeeze(), (1, 2, 0))
-                labels = (labels.cpu() / self.params.max_depth).numpy().squeeze()
-                depths = (depths.cpu() / self.params.max_depth).numpy().squeeze()
+                print_str = "Test step [{}/{}], a1: {:.5f}, rmse: {:.5f}.".format(step + 1, n_test, new['a1'], new['rmse'])
+                tbar.set_description(print_str)
+                images = images.cpu().numpy().squeeze().transpose(1, 2, 0)
+                labels = labels.cpu().numpy().squeeze().transpose(1, 2, 0)
+                depths = depths.cpu().numpy().squeeze().transpose(1, 2, 0)
+                labels = colored_depthmap(labels, self.params.min_depth, self.params.max_depth)
+                depths = colored_depthmap(depths, self.params.min_depth, self.params.max_depth)
+                #fuse = merge_images(images, labels, depths, self.params.min_depth, self.params.max_depth)
+                #plt.imsave(os.path.join(self.resdir, '{:04}.png'.format(step)), fuse)
+                # labels = colored_depthmap(labels.cpu().numpy().squeeze, self.params.min_depth, self.params.max_depth)
+                # depths = colored_depthmap(depths.cpu().numpy().squeeze, self.params.min_depth, self.params.max_depth)
                 plt.imsave(os.path.join(self.resdir, '{:04}_rgb.png'.format(step)), images)
                 plt.imsave(os.path.join(self.resdir, '{:04}_gt.png'.format(step)), labels, cmap=colormap[self.params.dataset])
                 plt.imsave(os.path.join(self.resdir, '{:04}_depth.png'.format(step)), depths, cmap=colormap[self.params.dataset])
@@ -219,9 +246,9 @@ class DepthEstimationTrainer(Trainer):
                     measures[measure_list[i]] += new[measure_list[i]].item()
                 data = prefetcher.next()
                 step += 1
-        measures_str = {key: '{:.5f}'.format(value / n_test) for key, value in measures.items()}
         fps = n_test / test_total_time
-        self.print('Testing done, fps {:4.2f} | {}'.format(fps, measures_str))
+        measures = {key: round(value / n_test, 5) for key, value in measures.items()}
+        self.print('Testing done, fps {:4.2f} | {}'.format(fps, measures))
         return
 
 
