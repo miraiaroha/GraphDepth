@@ -59,19 +59,19 @@ class Parameters():
         parser.add_argument('--retain',          action="store_true",
                             help='whether to restore the model from breakpoint')
         # dataset settings
-        parser.add_argument('--dataset',         type=str,      default='nyu',          choices=dataset_names
+        parser.add_argument('--dataset',         type=str,      default='nyu',          choices=dataset_names,
                             help='dataset: '+'|'.join(dataset_names)+' (default: nyu)')
-        parser.add_argument('--rgb-dir',         type=str,      required=True,
+        parser.add_argument('--rgb-dir',         type=str,      #required=True,
                             help='root to rgb')
-        parser.add_argument('--dep-dir',         type=str,      required=True,
+        parser.add_argument('--dep-dir',         type=str,      #required=True,
                            help='root to depth')
-        parser.add_argument('--train-rgb',       type=str,      required=True,
+        parser.add_argument('--train-rgb',       type=str,      #required=True,
                             help='path to the rgb txt file of trainset')
-        parser.add_argument('--train-dep',       type=str,      required=True,
+        parser.add_argument('--train-dep',       type=str,      #required=True,
                             help='path to the depth txt file of trainset')
-        parser.add_argument('--val-rgb',         type=str,      required=True,
+        parser.add_argument('--val-rgb',         type=str,      #required=True,
                              help='path to the rgb txt file of valset')
-        parser.add_argument('--val-dep',         type=str,      required=True,
+        parser.add_argument('--val-dep',         type=str,      #required=True,
                             help='path to the depth txt file of valset')
         parser.add_argument('--test-rgb',        type=str,
                             help='path to the rgb txt file of testset')
@@ -99,7 +99,7 @@ class Parameters():
                             help='Adam coefficients beta1 (default: 0.9)')
         parser.add_argument('--beta2',           type=float,    default=0.95,
                             help='Adam coefficients beta2 (default: 0.95)')
-        parser.add_argument('--weight-decay',    type=float,    default=5e-4,
+        parser.add_argument('--weight-decay',   type=float,    default=5e-4,
                             help='initial learning rate (default: 5e-4)')
         # scheduler settings
         parser.add_argument('--scheduler',       type=str,      default='step',         choices=sch_names,

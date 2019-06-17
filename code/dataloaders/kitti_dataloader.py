@@ -8,7 +8,7 @@ import sys
 #sys.path.append(os.path.dirname(__file__))
 import numpy as np
 from .transforms import *
-from .dataloaders import MyDataloader
+from .dataloader import MyDataloader
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 

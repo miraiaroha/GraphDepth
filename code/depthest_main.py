@@ -7,11 +7,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 import torchvision.models as models
-from utils.eval_utils import compute_errors
-from utils.vis_utils import display_figure
-from creator import create_datasets, create_lossfunc, create_network, \
-                    create_optimizer, create_params, create_scheduler
-from trainers import DepthEstimationTrainer
+from creator import create_lossfunc, create_scheduler, create_optimizer, create_params
+from models import create_network
+from dataloaders import create_datasets
+from depthest_trainer import DepthEstimationTrainer
 from config import Parameters
 
 
@@ -52,7 +51,7 @@ def test(args, net, datasets):
 
 def main():
     args = Parameters().parse()
-
+    
     np.random.seed(args.random_seed)
     torch.manual_seed(args.random_seed)
     torch.cuda.manual_seed_all(args.random_seed)

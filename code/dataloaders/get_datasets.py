@@ -11,9 +11,9 @@ def create_datasets(args):
     test_dataset = None
 
     if args.dataset == 'nyu':
-        from ..dataloaders import NYUDataset as TargetDataset
+        from .nyu_dataloader import NYUDataset as TargetDataset
     elif args.dataset == 'kitti':
-        from ..dataloaders import KITTIDataset as TargetDataset
+        from .kitti_dataloader import KITTIDataset as TargetDataset
     else:
         raise RuntimeError('Dataset not found.' +
                            'The dataset must be either of nyu or kitti.')

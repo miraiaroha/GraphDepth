@@ -1,4 +1,4 @@
-from ..models import ResNet
+from .model import ResNet
 
 def create_network(args):
     resnet_layer_settings = {'50':  [3, 4, 6, 3], 

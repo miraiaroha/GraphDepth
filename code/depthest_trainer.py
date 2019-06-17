@@ -10,8 +10,8 @@ import numpy as np
 import scipy.io
 import shutil
 from tensorboardX import SummaryWriter
-from .trainer import Trainer, DataPrefetcher
-from ..utils import predict_multi_scale, predict_whole_img, compute_errors, \
+from trainers import Trainer, DataPrefetcher
+from utils import predict_multi_scale, predict_whole_img, compute_errors, \
                     display_figure, colored_depthmap, merge_images
 import torch
 from torch.nn import DataParallel
@@ -46,8 +46,8 @@ class DepthEstimationTrainer(Trainer):
         self.params.resdir = resdir
         # Call the constructor of the parent class (Trainer)
         super().__init__(net, datasets, optimizer, scheduler, criterion,
-                         batch_size=params.batch, batch_size_val=params.batchval,
-                         max_epochs=params.epochs, threads=params.threads, eval_freq=params.f,
+                         batch_size=params.batch, batch_size_val=params.batch_val,
+                         max_epochs=params.epochs, threads=params.threads, eval_freq=params.eval_freq,
                          use_gpu=params.gpu, resume=params.resume, mode=params.mode,
                          sets=sets, workdir=workdir, logdir=logdir, resdir=resdir)
         # uncomment to display the model complexity

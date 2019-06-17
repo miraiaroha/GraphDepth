@@ -86,13 +86,15 @@ class Trainer(object):
                                       shuffle=True, num_workers=self.threads, 
                                       pin_memory=True, drop_last=False,
                                       worker_init_fn=lambda work_id:np.random.seed(work_id))
+        elif self.params.mode != 'test':
+            raise Exception("train set not found!")
         if 'train' in self.sets and self.datasets['val'] is not None:        
             self.valset = self.datasets[self.sets[1]]
             self.valloader = DataLoader(self.valset, self.batch_size_val,
                                       shuffle=False, num_workers=self.threads, 
                                       pin_memory=Trainer, drop_last=False,
                                       worker_init_fn=lambda work_id:np.random.seed(work_id))
-        else:
+        elif self.params.mode != 'test':
             raise Exception("Val set not found!")
         if 'test' in self.sets and self.datasets['test'] is not None:
             self.testset = self.datasets[self.sets[2]]
