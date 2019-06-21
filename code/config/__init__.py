@@ -133,7 +133,7 @@ class Parameters():
         parser.add_argument("--use-ms",          type=str,      default='True',
                             help="whether to multi-scale crop during test-stage.")    
         # workspace settings
-        parser.add_argument('--workdir',         type=str,      default='../workdir/',
+        parser.add_argument('--workdir',         type=str,      default='../workspace/',
                             help='directory for storing training files')
         parser.add_argument('--logdir',          type=str,  
                             help='subdir of workdir, storing checkpoint and logfile (style: LOG_net_dataset_exp)')

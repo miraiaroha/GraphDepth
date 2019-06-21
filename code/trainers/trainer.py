@@ -106,10 +106,10 @@ class Trainer(object):
         else:
             raise Exception("Workspace directory doesn't exist!")
         # log dir
+        time = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
         if self.logdir is not None:
             if not os.path.exists(self.logdir):
                 os.mkdir(self.logdir)
-            time = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
             logging = init_log(self.logdir, time, self.params.mode)
             self.print = logging.info
         else:
@@ -120,6 +120,7 @@ class Trainer(object):
                 json.dump(vars(self.params), f)
         # result dir
         if self.resdir is not None:
+            self.resdir = '{}_{}'.format(self.resdir, time)
             if not os.path.exists(self.resdir):
                 os.makedirs(self.resdir)
 
@@ -153,6 +154,7 @@ class Trainer(object):
             # Evaluate the model
             if self.eval_freq and epoch % self.eval_freq == 0:
                 acc = self.eval(epoch)
+                torch.cuda.empty_cache()
         self.print("Finished training! Best epoch {} best acc {}".format(self.best_epoch, self.best_acc))
         self.print("Spend time: {:.2f}h".format((time.time() - start_time) / 3600))
 
@@ -247,7 +249,7 @@ class Trainer(object):
     def reload(self, resume, mode='finetune'):
         if resume:
             if self._load_checkpoint(resume, mode):
-                self.print('Checkpoint was loaded successfully!')
+                self.print('=> Checkpoint was loaded successfully!')
         else:
             raise Exception("Resume doesn't exist!")
 
@@ -278,6 +280,7 @@ class Trainer(object):
             elif isinstance(checkpoint, str):
                 # checkpoint is the path
                 checkpoint_path = os.path.expanduser(checkpoint)
+            else:
                 raise TypeError
             checkpoint_dict = torch.load(checkpoint_path, map_location={'cuda:1': 'cuda:0'})
             old_model_dict = checkpoint_dict['net']
@@ -302,6 +305,8 @@ class Trainer(object):
         elif mode == 'test':
             net_state_dict = checkpoint_dict['net']
             use_gpu = checkpoint_dict['use_gpu']
+            start_epoch = checkpoint_dict['epoch']
+            best_acc = checkpoint_dict['acc']
         self.start_epoch = start_epoch
         self.best_acc = best_acc
         self.net.load_state_dict(net_state_dict)

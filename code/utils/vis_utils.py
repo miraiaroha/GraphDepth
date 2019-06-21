@@ -3,78 +3,119 @@
 ## This source code is licensed under the MIT-style license
 ##+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 import numpy as np
+import torch
 import torchvision
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from PIL import Image
 
-cmap = plt.cm.viridis
+cm1 = plt.cm.cividis
+cm2 = plt.cm.viridis
 
-def colored_depthmap(depth, d_min=None, d_max=None):
+def colored_depthmap(depth, d_min=None, d_max=None, cmap=plt.cm.jet):
+    """
+    Parameters
+    ----------
+    depth : numpy.ndarray 
+            shape [batch_size, h, w] or [h, w]
+    """
+    if len(depth.shape) == 2:
+        depth = np.expand_dims(depth, 0)
     if d_min is None:
         d_min = np.min(depth)
     if d_max is None:
         d_max = np.max(depth)
-    depth_relative = (depth - d_min) / (d_max - d_min)
-    return 255 * cmap(depth_relative)[:,:,:3] # H, W, C
+    depth = (depth - d_min) / (d_max - d_min)
+    b, h, w = depth.shape
+    depth_color = np.zeros((b, h, w, 3))
+    for d in range(depth_color.shape[0]):
+        depth_color[d] = cmap(depth[d])[:, :, :3]
+    return np.asarray(255 * depth_color, dtype=np.uint8)
 
-def merge_images(input, depth_target, depth_pred, d_min, d_max, orientation='row'):
-    rgb = 255 * np.transpose(np.squeeze(input.cpu().numpy()), (1,2,0)) # H, W, C
-    depth_target_cpu = np.squeeze(depth_target.cpu().numpy())
-    depth_pred_cpu = np.squeeze(depth_pred.data.cpu().numpy())
-    # d_min = min(np.min(depth_target_cpu), np.min(depth_pred_cpu))
-    # d_max = max(np.max(depth_target_cpu), np.max(depth_pred_cpu))
-    depth_target_col = colored_depthmap(depth_target_cpu, d_min, d_max)
-    depth_pred_col = colored_depthmap(depth_pred_cpu, d_min, d_max)
-    if orientation == 'row':
-        img_merge = np.hstack([rgb, depth_target_col, depth_pred_col])
-    else:
-        img_merge = np.vstack([rgb, depth_target_col, depth_pred_col])
+def merge_images(rgb, depth_target, depth_pred, orientation='row'):
+    """
+    Parameters
+    ----------
+    rgb, depth_target, depth_pred : numpy.ndarray
+                                      shape [batch_size, h, w, c]
+    
+    Return
+    ------
+    img_merge : numpy.ndarray
+                shape [batch_size, h*3, w, c] or [batch_size, h, w*3, c]
+    """
+    axis = 2 if orientation == 'row' else 1
+    img_merge = np.concatenate([rgb, depth_target, depth_pred], axis)
     return img_merge
 
-
-def imshow(img, height, width, mode='image'):
-    _, _, h, w = img.shape
-    img = torchvision.utils.make_grid(img, nrow=width)
-    npimg = img.cpu().numpy() if img.is_cuda else img.numpy()
-    fig = plt.figure(figsize=(w // 80 * width, h // 50 * height))
-    if mode == 'image':
-        plt.imshow(np.transpose(npimg, (1, 2, 0)))
-    elif mode == 'depth':
-        plt.imshow(npimg[0], cmap='plasma')
-    else:
-        plt.imshow(npimg[0], cmap='hot')
+def make_grid(images, nrow=4):
+    """
+    Parameters
+    ----------
+    images : numpy.ndarray
+            shape [batch_size, h, w, c]
+    nrow : int 
+           Number of images displayed in each row of the grid.
+           The Final grid size is (batch_size / nrow, nrow).
+    
+    Return
+    ------
+    images : numpy.ndarray
+             shape [batch_size/nrow * h, nrow * w, c]
+    """
+    b, h, w, c = images.shape
+    ncol = b // nrow
+    assert b // nrow * nrow == b, "batch size of images can not be exactly divided by nrow"
+    images = images.reshape(ncol, nrow * h, w, c)
+    images = images.transpose(1, 0, 2, 3)
+    images = images.reshape(nrow * h, ncol * w, c)
+    return images
+    
+def imshow_rgb(images, nrow, ncol):
+    """
+    Parameters
+    ----------
+    images : numpy.ndarray 
+             shape [h, w, c]
+    """
+    h, w, c = images.shape
+    #fig = plt.figure(figsize=(w // 80 * ncol, h // 50 * nrow))
+    fig = plt.figure()
+    plt.imshow(images)
     return fig
 
 def display_figure(params, writer, net, images, labels, depths, epoch):
     m = min(images.shape[0], 4)
-    images = images[:m]
-    labels = labels[:m]
-    depths = depths[:m]
-    # display image figure
-    b, c, h, w = images.shape
-    images = F.interpolate(images, size=(h // 2, w // 2), mode='bilinear', align_corners=True)
-    fig1 = imshow(images, height=1, width=b, mode='image')
-    del images
+    images_npy = images[:m].cpu().numpy().transpose(0, 2, 3, 1)
+    labels_npy = labels[:m].cpu().numpy().transpose(0, 2, 3, 1)
+    depths_npy = depths[:m].cpu().numpy().transpose(0, 2, 3, 1)
+    b, h, w, c = images_npy.shape
+    # display image gt and pred figure
+    #images = F.interpolate(images, size=(h // 2, w // 2), mode='bilinear', align_corners=True)
+    #labels = F.interpolate(labels, size=(h // 2, w // 2), mode='nearest', align_corners=True)
+    #depths = F.interpolate(depths, size=(h // 2, w // 2), mode='nearest', align_corners=True)
+    images_colored = np.asarray(255 * images_npy, dtype=np.uint8)
+    labels_colored = colored_depthmap(labels_npy.squeeze(), cmap=cm1)
+    depths_colored = colored_depthmap(depths_npy.squeeze(), cmap=cm1)
+    fuse = merge_images(images_colored, labels_colored, depths_colored, 'col')
+    fuse = make_grid(fuse, nrow=1)
+    fig1 = imshow_rgb(fuse, nrow=1, ncol=b)
     writer.add_figure('figure1-images', fig1, epoch)
-    # display gt and pred figure
-    labels = F.interpolate(labels, size=(h // 2, w // 2), mode='nearest')
-    depths = F.interpolate(depths, size=(h // 2, w // 2), mode='nearest')
-    fuse = torch.cat((labels, depths), 0)
-    fig2 = imshow(fuse, height=2, width=b, mode='depth')
-    del fuse, labels, depths
-    writer.add_figure('figure2-depths', fig2, epoch)
+    del fuse, images_npy, labels_npy, depths_npy
     # display similarity figure
     if params.decoder in ['attention']:
         sim_map = net.decoder.get_sim_map().cpu()
+        sim_map = sim_map[:b]
         N = sim_map.shape[1]
         points = [N // 4, N // 2, 3 * N // 4]
         sim_pixels = sim_map[:, points]
         sim_pixels = sim_pixels.reshape((b, len(points), h//8, w//8))
-        sim_pixels = sim_pixels.permute((1, 0, 2, 3))
-        sim_pixels = sim_pixels.reshape((-1, 1, h//8, w//8))
+        sim_pixels = sim_pixels.permute((1, 0, 2, 3)).reshape((-1, 1, h//8, w//8))
         sim_pixels = F.interpolate(sim_pixels, size=(h // 2, w // 2), mode='bilinear', align_corners=True)
-        fig3 = imshow(sim_pixels, height=2, width=b, mode='sim_map')
-        writer.add_figure('figure3-pixel_attentions', fig3, epoch)
+        sim_pixels = sim_pixels.cpu().numpy().transpose(0, 2, 3, 1)
+        sim_pixels = colored_depthmap(sim_pixels.squeeze(), cmap=cm2)
+        sim_pixels = make_grid(sim_pixels, nrow=len(points))
+        fig2 = imshow_rgb(sim_pixels, nrow=len(points), ncol=b)
+        writer.add_figure('figure3-pixel_attentions', fig2, epoch)
         del sim_map, sim_pixels
     return
