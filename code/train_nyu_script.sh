@@ -2,7 +2,7 @@
 # check gpu info
 nvidia-smi
 # pytorch 04
-PYTHON="~/anaconda3/envs/tensorflow/bin/python"
+PYTHON="$HOME/anaconda3/envs/tensorflow/bin/python"
 ##### experimental settings
 # network config
 ENCODER="resnet50"
