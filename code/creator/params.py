@@ -21,9 +21,9 @@ def create_params(args, net):
         add_weight_params = get_params(add_modules, 'weight')
         add_bias_params = get_params(add_modules, 'bias')
         if args.optimizer in ['adabound', 'amsbound']:
-            optim_params = [{'params': base_params, 'lr': args.lr, 'final_lr': args.flr},
-                            {'params': add_weight_params, 'lr': args.lr*10, 'final_lr': args.flr},
-                            {'params': add_bias_params, 'lr': args.lr*20, 'final_lr': args.flr*10}]
+            optim_params = [{'params': base_params, 'lr': args.lr, 'final_lr': args.final_lr},
+                            {'params': add_weight_params, 'lr': args.lr*10, 'final_lr': args.final_lr*10},
+                            {'params': add_bias_params, 'lr': args.lr*20, 'final_lr': args.final_lr*10}]
         else:
             optim_params = [{'params': base_params, 'lr': args.lr},
                             {'params': add_weight_params, 'lr': args.lr*10},

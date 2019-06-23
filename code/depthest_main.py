@@ -7,8 +7,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 import torchvision.models as models
-from creator import create_lossfunc, create_scheduler, create_optimizer, create_params
-from models import create_network
+from creator import create_scheduler, create_optimizer, create_params
+from models import create_network, create_lossfunc
 from dataloaders import create_datasets
 from depthest_trainer import DepthEstimationTrainer
 from config import Parameters
@@ -51,7 +51,6 @@ def test(args, net, datasets):
 
 def main():
     args = Parameters().parse()
-
     np.random.seed(args.random_seed)
     torch.manual_seed(args.random_seed)
     torch.cuda.manual_seed_all(args.random_seed)
@@ -64,7 +63,7 @@ def main():
     net = create_network(args)
     # Loss Function
     criterion = create_lossfunc(args, net)
-    # optimizer parameters
+    # optimizer and parameters
     optim_params = create_params(args, net)
     optimizer = create_optimizer(args, optim_params)
     # learning rate scheduler

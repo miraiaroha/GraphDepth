@@ -20,12 +20,12 @@ def create_datasets(args):
     kwargs = {'min_depth': args.min_depth, 'max_depth': args.max_depth,
               'flip': args.random_flip, 'scale': args.random_scale,
               'rotate': args.random_rotate, 'jitter': args.random_jitter, 'crop': args.random_crop}
-    if args.mode == 'test':
-        test_dataset = TargetDataset(args.rgb_dir, args.dep_dir, args.test_rgb, args.test_dep, mode='test', **kwargs)
-    else:
+    if args.mode == 'train':
         train_dataset = TargetDataset(args.rgb_dir, args.dep_dir, args.train_rgb, args.train_dep, mode='train', **kwargs)
         val_dataset = TargetDataset(args.rgb_dir, args.dep_dir, args.val_rgb, args.val_dep, mode='val', **kwargs)
-    
+    elif args.mode == 'test':
+        test_dataset = TargetDataset(args.rgb_dir, args.dep_dir, args.test_rgb, args.test_dep, mode='test', **kwargs)
+        
     print("<= datasets created.")
     datasets = {'train': train_dataset, 'val': val_dataset, 'test': test_dataset}
     return datasets

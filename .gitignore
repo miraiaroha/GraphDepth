@@ -1,7 +1,7 @@
 checkpoint/
 workspace/
 *.ipynb
-*.sh
+# *.sh
 
 # vscode
 .vscode

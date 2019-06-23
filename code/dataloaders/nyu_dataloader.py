@@ -81,7 +81,7 @@ if __name__ == '__main__':
     valrgb = '../datasets/nyu_path/valid_rgb.txt'
     valdep = '../datasets/nyu_path/valid_depth.txt'
 
-    kwargs = {'min_depth': 0.65, 'max_depth': 10.0,
+    kwargs = {'min_depth': 0.72, 'max_depth': 10.0,
               'flip': True, 'scale': True,
               'rotate': True, 'jitter': True, 'crop': True}
 

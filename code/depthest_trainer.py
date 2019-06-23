@@ -18,12 +18,14 @@ from torch.nn import DataParallel
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from copy import deepcopy
+import json
 
 class DepthEstimationTrainer(Trainer):
     def __init__(self, params, net, datasets, criterion, optimizer, scheduler, 
                  sets=['train', 'val', 'test'], verbose=50, stat=False, 
                  eval_func=compute_errors, 
                  disp_func=display_figure):
+        self.time = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
         self.params = params
         self.verbose = verbose
         self.eval_func = eval_func
@@ -31,17 +33,16 @@ class DepthEstimationTrainer(Trainer):
         # Init dir
         if params.workdir is not None:
             workdir = os.path.expanduser(params.workdir)
-        logdir = None
         if params.logdir is None:
             logdir = os.path.join(workdir, 'log_{}_{}'.format(params.encoder+params.decoder, params.dataset))
         else:
             logdir = os.path.join(workdir, params.logdir)
-        
         resdir = None
-        if params.resdir is None:
-            resdir = os.path.join(logdir, 'res')
-        else:
-            resdir = os.path.join(logdir, params.resdir)
+        if self.params.mode == 'test':
+            if params.resdir is None:
+                resdir = os.path.join(logdir, 'res')
+            else:
+                resdir = os.path.join(logdir, params.resdir)
         # Call the constructor of the parent class (Trainer)
         super().__init__(net, datasets, optimizer, scheduler, criterion,
                          batch_size=params.batch, batch_size_val=params.batch_val,
@@ -50,6 +51,10 @@ class DepthEstimationTrainer(Trainer):
                          sets=sets, workdir=workdir, logdir=logdir, resdir=resdir)
         self.params.logdir = self.logdir
         self.params.resdir = self.resdir
+        # params json
+        if self.params.mode == 'train':
+            with open(os.path.join(self.logdir, 'params_{}.json'.format(self.time)), 'w') as f:
+                json.dump(vars(self.params), f)
         # uncomment to display the model complexity
         if stat:
             from torchstat import stat
@@ -126,8 +131,14 @@ class DepthEstimationTrainer(Trainer):
             time_left = (self.n_steps / self.global_step - 1.0) * time_sofar
             lr = self.optimizer.param_groups[0]['lr']
             if self.verbose > 0 and (step + 1) % (self.steps_per_epoch // self.verbose) == 0:
-                print_str = 'Epoch[{:>2}/{:>2}] | Step[{:>4}/{:>4}] | fps {:4.2f} | Loss: {:7.3f} | elapsed {:.2f}h | left {:.2f}h | lr {:.3e}'. \
-                    format(epoch, self.max_epochs, step + 1, self.steps_per_epoch, fps, total_loss, time_sofar, time_left, lr)
+                if self.params.classifier == 'OHEM':
+                    ratio = self.criterion.AppearanceLoss.ohem_ratio
+                    print_str = 'Epoch[{:>2}/{:>2}] | Step[{:>4}/{:>4}] | fps {:4.2f} | Loss: {:7.3f} | elapsed {:.2f}h | left {:.2f}h | OHEM {:.4f} | lr {:.3e}'. \
+                        format(epoch, self.max_epochs, step + 1, self.steps_per_epoch, fps, total_loss, time_sofar, time_left, ratio, lr)
+                    self.writer.add_scalar('OHEM', ratio)
+                else:
+                    print_str = 'Epoch[{:>2}/{:>2}] | Step[{:>4}/{:>4}] | fps {:4.2f} | Loss: {:7.3f} | elapsed {:.2f}h | left {:.2f}h | lr {:.3e}'. \
+                        format(epoch, self.max_epochs, step + 1, self.steps_per_epoch, fps, total_loss, time_sofar, time_left, lr)
                 self.print(print_str)
             self.writer.add_scalar('loss', total_loss, self.global_step)
             self.writer.add_scalar('lr', lr, epoch)
@@ -215,7 +226,7 @@ class DepthEstimationTrainer(Trainer):
             while data is not None:
                 images, labels = data[0].to(device), data[1].to(device)
                 before_op_time = time.time()
-                if self.params.use_ms == 'True': 
+                if self.params.use_ms: 
                     output = predict_multi_scale(self.net, images, ([0.75, 1, 1.25]), 
                         self.params.classes, self.params.use_flip)
                 else:
@@ -237,9 +248,6 @@ class DepthEstimationTrainer(Trainer):
                 labels = colored_depthmap(labels).squeeze()
                 depths = colored_depthmap(depths).squeeze()
                 #fuse = merge_images(images, labels, depths, self.params.min_depth, self.params.max_depth)
-                #plt.imsave(os.path.join(self.resdir, '{:04}.png'.format(step)), fuse)
-                # labels = colored_depthmap(labels.cpu().numpy().squeeze, self.params.min_depth, self.params.max_depth)
-                # depths = colored_depthmap(depths.cpu().numpy().squeeze, self.params.min_depth, self.params.max_depth)
                 plt.imsave(os.path.join(self.resdir, '{:04}_rgb.png'.format(step)), images)
                 plt.imsave(os.path.join(self.resdir, '{:04}_gt.png'.format(step)), labels)
                 plt.imsave(os.path.join(self.resdir, '{:04}_depth.png'.format(step)), depths)

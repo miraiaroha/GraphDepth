@@ -13,20 +13,21 @@ from torch.autograd import Variable
 from collections import OrderedDict
 from .sadecoder import SADecoder
 from .gcdecoder import GCDecoder
-from .losses import OrdinalRegression2d, CrossEntropy2d, OhemCrossEntropy2d
 
-def continuous2discrete(continuous_depth, Min, Max, num_classes):
-    if continuous_depth.is_cuda:
+def continuous2discrete(depth, Min, Max, num_classes):
+    if depth.is_cuda:
         Min, Max, NC = Min.cuda(), Max.cuda(), num_classes.cuda()
-    continuous_depth = torch.clamp(continuous_depth, Min.item(), Max.item())
-    discrete_depth = torch.round(torch.log(continuous_depth / Min) / torch.log(Max / Min) * (NC - 1))
-    return discrete_depth
+    #continuous_depth = torch.clamp(continuous_depth, Min.item(), Max.item())
+    mask = 1 - (depth > Min) * (depth < Max)
+    depth = torch.round(torch.log(depth / Min) / torch.log(Max / Min) * (NC - 1))
+    depth[mask] = 0
+    return depth
 
-def discrete2continuous(discrete_depth, Min, Max, num_classes):
-    if discrete_depth.is_cuda:
+def discrete2continuous(depth, Min, Max, num_classes):
+    if depth.is_cuda:
         Min, Max, NC = Min.cuda(), Max.cuda(), num_classes.cuda()
-    continuous_depth = torch.exp(discrete_depth / (NC - 1) * torch.log(Max / Min) + torch.log(Min))
-    return continuous_depth
+    depth = torch.exp(depth / (NC - 1) * torch.log(Max / Min) + torch.log(Min))
+    return depth
 
 class ClassificationModel(nn.Module):
     def __init__(self, min_depth, max_depth, num_classes, classifierType, inferenceType):
@@ -56,7 +57,7 @@ class ClassificationModel(nn.Module):
         nc = torch.arange(num_classes.item())
         if pred_score.is_cuda:
             nc = nc.cuda()
-        weight = nc * torch.log(Max / Min) / (NC - 1) + torch.log(Min)
+        weight = nc * torch.log(Max / Min) / (nc - 1) + torch.log(Min)
         weight = weight.unsqueeze(-1)
         pred_prob = pred_prob.permute((0, 2, 3, 1))
         output = torch.exp(torch.matmul(pred_prob, weight))
@@ -232,27 +233,16 @@ class ResNet(ClassificationModel):
         return y
 
     class LossFunc(nn.Module):
-        def __init__(self, min_depth, max_depth, num_classes, classifierType, ohem=False, ignore_index=None):
+        def __init__(self, min_depth, max_depth, num_classes, 
+                     AppearanceLoss=None, AuxiliaryLoss=None):
             super(ResNet.LossFunc, self).__init__()
             self.min_depth = torch.tensor(min_depth, dtype=torch.float)
             self.max_depth = torch.tensor(max_depth, dtype=torch.float)
             self.num_classes = torch.tensor(num_classes, dtype=torch.float)
-            self.ignore_index = ignore_index
-            if classifierType == 'OR': # 'Ordinal Regression
-                self.AppearanceLoss = OrdinalRegression2d(ignore_index=ignore_index)
-            elif classifierType == 'CE':  # 'Cross Entropy'
-                if ignore_index is None:
-                    ignore_index = num_classes + 1
-                self.AppearanceLoss = CrossEntropy2d(ignore_index)
-            elif classifierType == 'OHEM': # 'Online Hard Example Mining'
-                if ignore_index is None:
-                    ignore_index = num_classes + 1
-                    self.AppearanceLoss = OhemCrossEntropy2d(ignore_index) 
-            else:
-                raise RuntimeError('classifier not found.' +
-                           'The classifier must be either of OR, CE or OHEM.')
+            self.AppearanceLoss = AppearanceLoss
+            self.AuxiliaryLoss = AuxiliaryLoss
 
-        def forward(self, pred_score, label):
+        def forward(self, pred, label):
             """
                 Args:
                     pred: [batch, num_classes, h, w]
@@ -260,6 +250,6 @@ class ResNet(ClassificationModel):
             """
             label = continuous2discrete(label, self.min_depth, self.max_depth, self.num_classes)
             # image loss
-            image_loss = self.AppearanceLoss(pred_score, label.squeeze(1).long())
+            image_loss = self.AppearanceLoss(pred, label.squeeze(1).long())
             return image_loss
     

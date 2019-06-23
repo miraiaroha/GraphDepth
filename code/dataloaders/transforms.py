@@ -298,15 +298,14 @@ class Rotate(object):
     def __call__(self, img):
         """
         Args:
-            img (numpy.ndarray (C x H x W)): Image to be rotated.
+            img (numpy.ndarray (H x W x C)): Image to be rotated.
 
         Returns:
-            img (numpy.ndarray (C x H x W)): Rotated image.
+            img (numpy.ndarray (H x W x C)): Rotated image.
         """
 
         # order=0 means nearest-neighbor type interpolation
         return itpl.rotate(img, self.angle, reshape=False, prefilter=False, order=0)
-
 
 class Resize(object):
     """Resize the the given ``numpy.ndarray`` to the given size.

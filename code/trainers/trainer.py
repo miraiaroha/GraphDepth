@@ -79,7 +79,7 @@ class Trainer(object):
         self.start_epoch = 1
         self.global_step = 1
         #self.stats = {}
-        # Dataloader
+        # trainloader
         if 'train' in self.sets and self.datasets['train'] is not None:
             self.trainset = self.datasets[self.sets[0]]
             self.trainloader = DataLoader(self.trainset, self.batch_size,
@@ -88,6 +88,7 @@ class Trainer(object):
                                       worker_init_fn=lambda work_id:np.random.seed(work_id))
         elif self.params.mode != 'test':
             raise Exception("train set not found!")
+        # valloader
         if 'train' in self.sets and self.datasets['val'] is not None:        
             self.valset = self.datasets[self.sets[1]]
             self.valloader = DataLoader(self.valset, self.batch_size_val,
@@ -96,6 +97,7 @@ class Trainer(object):
                                       worker_init_fn=lambda work_id:np.random.seed(work_id))
         elif self.params.mode != 'test':
             raise Exception("Val set not found!")
+        # testloader
         if 'test' in self.sets and self.datasets['test'] is not None:
             self.testset = self.datasets[self.sets[2]]
             self.testloader = DataLoader(self.testset, 1, shuffle=False)
@@ -106,21 +108,16 @@ class Trainer(object):
         else:
             raise Exception("Workspace directory doesn't exist!")
         # log dir
-        time = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
         if self.logdir is not None:
             if not os.path.exists(self.logdir):
                 os.mkdir(self.logdir)
-            logging = init_log(self.logdir, time, self.params.mode)
+            logging = init_log(self.logdir, self.time, self.params.mode)
             self.print = logging.info
         else:
             self.print = print
-        # params json
-        if self.params.mode == 'train':
-            with open(os.path.join(self.logdir, 'params_{}.json'.format(time)), 'w') as f:
-                json.dump(vars(self.params), f)
         # result dir
         if self.resdir is not None:
-            self.resdir = '{}_{}'.format(self.resdir, time)
+            self.resdir = '{}_{}'.format(self.resdir, self.time)
             if not os.path.exists(self.resdir):
                 os.makedirs(self.resdir)
 
