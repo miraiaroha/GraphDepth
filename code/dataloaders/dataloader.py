@@ -32,6 +32,8 @@ class MyDataloader(data.Dataset):
                        make, loader=img_loader):
         self.min_depth = min_depth
         self.max_depth = max_depth
+        root_image = os.path.expanduser(root_image)
+        root_depth = os.path.expanduser(root_depth)
         self.images = make(root_image, image_txt)
         self.depths = make(root_depth, depth_txt)
         assert len(self.images)>0, "Found 0 images in folder of: " + root_image + "\n"
