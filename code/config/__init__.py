@@ -30,12 +30,12 @@ class Parameters():
         parser.add_argument("--random-seed", type=int, default=2019,
                             help="random seed to have reproducible results.")
         # model settings
-        parser.add_argument('--mode',            type=str,      default='train',     choices=modes,
+        parser.add_argument('--mode',            type=str,      default='train',          choices=modes,
                             help='mode: '+'|'.join(modes)+' (default: train)')
-        parser.add_argument('--encoder',         type=str,      default='resnet50',     choices=encoder_names,
+        parser.add_argument('--encoder',         type=str,      default='resnet50',       choices=encoder_names,
                             help='encoder: '+'|'.join(encoder_names)+' (default: resnet50)')
-        parser.add_argument('--decoder',         type=str,      default='graph',        choices=decoder_names,
-                            help='decoder: '+'|'.join(decoder_names)+' (default: graph)')
+        parser.add_argument('--decoder',         type=str,      default='attention',      choices=decoder_names,
+                            help='decoder: '+'|'.join(decoder_names)+" (default: ['attention'])")
         parser.add_argument('--classes',         type=int,      default=80,
                             help='number of discrete classes of detph (default: 80)')
         parser.add_argument('--resume',          type=str,
@@ -45,7 +45,7 @@ class Parameters():
         parser.add_argument('--retain',          action="store_true",
                             help='whether to restore the model from breakpoint')
         # dataset settings
-        parser.add_argument('--dataset',         type=str,      default='nyu',          choices=dataset_names,
+        parser.add_argument('--dataset',         type=str,      default='nyu',            choices=dataset_names,
                             help='dataset: '+'|'.join(dataset_names)+' (default: nyu)')
         parser.add_argument('--rgb-dir',         type=str,      #required=True,
                             help='root to rgb')
@@ -93,6 +93,8 @@ class Parameters():
                             help="choose the threshold for hard samples. (default: 0.5)")
         parser.add_argument("--ohem-keep",       type=int,      default=100000,
                             help="choose the samples with correct probability underthe threshold. (default: 100000)")
+        parser.add_argument('--alpha',           type=float,    default=0.4,
+                            help='coefficient of intermediate supervision loss (default: 0.4)')
         # optimizer settings
         parser.add_argument('--optimizer',       type=str,      default='sgd',          choices=opt_names,
                             help='optimizer: '+'|'.join(opt_names)+' (default: sgd)')
@@ -125,8 +127,6 @@ class Parameters():
                             help="decay rate of step or plateau lr-scheduler (default: 0.1)")
         parser.add_argument("--power",           type=float,    default=0.9,
                             help="decay rate of poly lr-scheduler (default: 0.9)")
-        parser.add_argument('--alpha-seg',       type=float,    default=0.5,
-                            help='coefficient of segmentation loss (default: 0.5)')
         # common settings
         parser.add_argument('--batch',           type=int,      default=8,
                             help='batch size of trainset (default: 8)')

@@ -31,8 +31,8 @@ THREADS=4
 OPTIMIZER="sgd"
 SCHEDULER="poly"
 POWER=0.9
-USE_WEIGHTS=False
-CLASSIFIER="OR"
+USE_WEIGHTS=True
+CLASSIFIER="CE"
 INFERENCE="soft"
 EPS=0.0
 PRIOR="gaussian"
@@ -40,7 +40,7 @@ OHEMTHRES=0.7
 OHEMKEEP=100000
 # set the output path of checkpoints, training log.
 WORKSPACE_DIR="../workspace/"
-LOG_DIR="log_${ENCODER}${DECODER}_${DATASET}_${CLASSIFIER}"
+LOG_DIR="log_${ENCODER}${DECODER}_${DATASET}_${CLASSIFIER}_190625"
 ########################################################################################################################
 #  Training
 ########################################################################################################################

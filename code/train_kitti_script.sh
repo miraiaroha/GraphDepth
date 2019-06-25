@@ -5,7 +5,7 @@ nvidia-smi
 PYTHON="$HOME/anaconda3/envs/tensorflow/bin/python"
 # network config
 ENCODER="resnet50"
-DECODER="graph"
+DECODER="attention"
 DATASET="kitti"
 NUM_CLASSES=80
 # datasets
@@ -31,7 +31,7 @@ OPTIMIZER="sgd"
 SCHEDULER="poly"
 POWER=0.9
 USE_WEIGHTS=False
-CLASSIFIER="OR"
+CLASSIFIER="CE"
 INFERENCE="soft"
 EPS=0.0
 PRIOR="uniform"

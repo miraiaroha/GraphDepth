@@ -14,76 +14,68 @@ from collections import OrderedDict
 from .sadecoder import SADecoder
 from .gcdecoder import GCDecoder
 
-def continuous2discrete(depth, Min, Max, num_classes):
-    if depth.is_cuda:
-        Min, Max, NC = Min.cuda(), Max.cuda(), num_classes.cuda()
-    #continuous_depth = torch.clamp(continuous_depth, Min.item(), Max.item())
-    mask = 1 - (depth > Min) * (depth < Max)
-    depth = torch.round(torch.log(depth / Min) / torch.log(Max / Min) * (NC - 1))
+def continuous2discrete(depth, d_min, d_max, n_c):
+    mask = 1 - (depth > d_min) * (depth < d_max)
+    depth = torch.round(torch.log(depth / d_min) / np.log(d_max / d_min) * (n_c - 1))
     depth[mask] = 0
     return depth
 
-def discrete2continuous(depth, Min, Max, num_classes):
-    if depth.is_cuda:
-        Min, Max, NC = Min.cuda(), Max.cuda(), num_classes.cuda()
-    depth = torch.exp(depth / (NC - 1) * torch.log(Max / Min) + torch.log(Min))
+def discrete2continuous(depth, d_min, d_max, n_c):
+    depth = torch.exp(depth / (n_c - 1) * np.log(d_max / d_min) + np.log(d_min))
     return depth
 
-class ClassificationModel(nn.Module):
+class BaseClassificationModel_(nn.Module):
     def __init__(self, min_depth, max_depth, num_classes, classifierType, inferenceType):
         super().__init__()
-        self.min_depth = torch.tensor(min_depth, dtype=torch.float)
-        self.max_depth = torch.tensor(max_depth, dtype=torch.float)
-        self.num_classes = torch.tensor(num_classes, dtype=torch.float)
+        self.min_depth = min_depth
+        self.max_depth = max_depth
+        self.num_classes = num_classes
         self.classifierType = classifierType
         self.inferenceType = inferenceType
 
     def decode_ord(self, y):
         batch_size, prob, height, width = y.shape
-        y = torch.reshape(y, (batch_size, self.num_classes, 2, height, width))
+        y = torch.reshape(y, (batch_size, prob//2, 2, height, width))
         denominator = torch.sum(torch.exp(y), 2)
         pred_score = torch.div(torch.exp(y[:, :, 1, :, :]), denominator)
         return pred_score
 
-    def hard_cross_entropy(self, pred_score, Min, Max, num_classes):
+    def hard_cross_entropy(self, pred_score, d_min, d_max, n_c):
         pred_label = torch.argmax(pred_score, 1, keepdim=True).float()
-        pred_depth = discrete2continuous(pred_label, Min, Max, num_classes)
+        pred_depth = discrete2continuous(pred_label, d_min, d_max, n_c)
         return pred_depth
 
-    def soft_cross_entropy(self, pred_score, Min, Max, num_classes):
-        if pred_score.is_cuda:
-            Min, Max = Min.cuda(), Max.cuda()
-        pred_prob = F.softmax(pred_score, dim=1)
-        nc = torch.arange(num_classes.item())
-        if pred_score.is_cuda:
-            nc = nc.cuda()
-        weight = nc * torch.log(Max / Min) / (nc - 1) + torch.log(Min)
+    def soft_cross_entropy(self, pred_score, d_min, d_max, n_c):
+        pred_prob = F.softmax(pred_score, dim=1).permute((0, 2, 3, 1))
+        weight = torch.arange(n_c).float().cuda()
+        weight = weight * np.log(d_max / d_min) / (n_c - 1) + np.log(d_min)
         weight = weight.unsqueeze(-1)
-        pred_prob = pred_prob.permute((0, 2, 3, 1))
         output = torch.exp(torch.matmul(pred_prob, weight))
         output = output.permute((0, 3, 1, 2))
         return output
 
-    def hard_ordinal_regression(self, pred_prob, Min, Max, num_classes):
+    def hard_ordinal_regression(self, pred_prob, d_min, d_max, n_c):
         mask = (pred_prob > 0.5).float()
         pred_label = torch.sum(mask, 1, keepdim=True)
         #pred_label = torch.round(torch.sum(pred_prob, 1, keepdim=True))
-        pred_depth = (discrete2continuous(pred_label, Min, Max, num_classes) +
-                      discrete2continuous(pred_label + 1, Min, Max, num_classes)) / 2
+        pred_depth = (discrete2continuous(pred_label, d_min, d_max, n_c) +
+                      discrete2continuous(pred_label + 1, d_min, d_max, n_c)) / 2
         return pred_depth
 
-    def soft_ordinal_regression(self, pred_prob, Min, Max, num_classes):
+    def soft_ordinal_regression(self, pred_prob, d_min, d_max, n_c):
         pred_prob_sum = torch.sum(pred_prob, 1, keepdim=True)
         Intergral = torch.floor(pred_prob_sum)
         Fraction = pred_prob_sum - Intergral
-        depth_low = (discrete2continuous(Intergral, Min, Max, num_classes) +
-                     discrete2continuous(Intergral + 1, Min, Max, num_classes)) / 2
-        depth_high = (discrete2continuous(Intergral + 1, Min, Max, num_classes) +
-                      discrete2continuous(Intergral + 2, Min, Max, num_classes)) / 2
+        depth_low = (discrete2continuous(Intergral, d_min, d_max, n_c) +
+                     discrete2continuous(Intergral + 1, d_min, d_max, n_c)) / 2
+        depth_high = (discrete2continuous(Intergral + 1, d_min, d_max, n_c) +
+                      discrete2continuous(Intergral + 2, d_min, d_max, n_c)) / 2
         pred_depth = depth_low * (1 - Fraction) + depth_high * Fraction
         return pred_depth
 
     def inference(self, y):
+        if isinstance(y, list):
+            y = y[1]
         # mode
         # OR = Ordinal Regression
         # CE = Cross Entropy
@@ -104,31 +96,32 @@ class ClassificationModel(nn.Module):
         raise NotImplementedError
 
     
-def make_decoder(decoder='graph 2048 128 1'):
-    command = decoder.split(' ')
-    if command[0] == 'graph':
+def make_decoder(command='attention'):
+    #command = eval(command)
+    if command == 'graph':
         dec = GCDecoder
-    elif command[0] == 'attention':
+    elif command == 'attention':
         dec = SADecoder
     else:
         raise RuntimeError('decoder not found.' +
                            'The decoder must be either graph or attention.')
-    return dec(*[int(x) for x in command[1:]])
+    return dec()
 
-def make_classifier(classifierType='OR', num_classes=80, in_channel=2048):
-    if classifierType in ['CE', 'OHEM']:
-        out_channel = num_classes 
-    elif classifierType == 'OR':
-        out_channel = 2 * num_classes
-    else:
-        raise RuntimeError('classifier not found.' +
-                           'The classifier must be either of CE or OR.')
+def make_classifier(classifierType='OR', num_classes=80, channel1=1024, channel2=512):
+    classes = 2 * num_classes if classifierType == 'OR' else num_classes
+
+    interout = nn.Sequential(OrderedDict([
+        ('conv_1',   nn.Conv2d(channel1, channel1//2, kernel_size=3, stride=1, padding=1)),
+        ('bn',       nn.BatchNorm2d(channel1//2)),
+        ('dropout',  nn.Dropout2d(0.10)),
+        ('conv_2',   nn.Conv2d(channel1//2, classes, kernel_size=1, stride=1, padding=0, bias=True)),
+        ('upsample', nn.Upsample(scale_factor=8, mode='bilinear', align_corners=True))]))
+
     classifier = nn.Sequential(OrderedDict([
-        ('conv', nn.Conv2d(in_channel, out_channel, kernel_size=1, stride=1)),
-        ('upsample', nn.Upsample(scale_factor=8, mode='bilinear', align_corners=True)),
-        ]))
-    return classifier
-
+        ('conv',     nn.Conv2d(channel2, classes, kernel_size=3, stride=1, padding=1)),
+        ('upsample', nn.Upsample(scale_factor=8, mode='bilinear', align_corners=True))]))
+    
+    return [interout, classifier]
 
 class Bottleneck(nn.Module):
     expansion = 4
@@ -164,7 +157,7 @@ class Bottleneck(nn.Module):
         out = self.relu(out)
         return out
 
-class ResNet(ClassificationModel):
+class ResNet(BaseClassificationModel_):
     def __init__(self, min_depth, max_depth, num_classes,
                  classifierType, inferenceType, decoderType,
                  layers=[3, 4, 6, 3], 
@@ -177,19 +170,12 @@ class ResNet(ClassificationModel):
         self.relu1 = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0])
-        # fixed the parameters before
-        # for p in self.parameters():
-        #     p.requires_grad = False
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=1, dilation=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=1, dilation=4)
-        # for m in self.modules():
-        #     if isinstance(m, nn.BatchNorm2d):
-        #         m.weight.requires_grad = False
-        #         m.bias.requires_grad = False
-        # extra added layers
+        
         self.decoder = make_decoder(decoderType)
-        self.classifier = make_classifier(classifierType, num_classes, 2048)
+        self.interout, self.classifier = make_classifier(classifierType, num_classes, channel1=1024, channel2=512)
         self.parameter_initialization()
 
     def parameter_initialization(self):
@@ -225,31 +211,38 @@ class ResNet(ClassificationModel):
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
+        inter_y = self.interout(x)
         x = self.layer4(x)
         x = self.decoder(x)
         y = self.classifier(x)
         if self.classifierType == 'OR':
             y = self.decode_ord(y)
-        return y
+            inter_y = self.decode_ord(inter_y)
+        return [inter_y, y]
 
     class LossFunc(nn.Module):
         def __init__(self, min_depth, max_depth, num_classes, 
-                     AppearanceLoss=None, AuxiliaryLoss=None):
+                     AppearanceLoss=None, AuxiliaryLoss=None, alpha=0.4):
             super(ResNet.LossFunc, self).__init__()
-            self.min_depth = torch.tensor(min_depth, dtype=torch.float)
-            self.max_depth = torch.tensor(max_depth, dtype=torch.float)
-            self.num_classes = torch.tensor(num_classes, dtype=torch.float)
+            self.min_depth = min_depth
+            self.max_depth = max_depth
+            self.num_classes = num_classes
+            self.alpha = alpha
             self.AppearanceLoss = AppearanceLoss
             self.AuxiliaryLoss = AuxiliaryLoss
 
-        def forward(self, pred, label):
+        def forward(self, preds, label):
             """
-                Args:
-                    pred: [batch, num_classes, h, w]
-                    label: [batch, 1, h, w]
+            Parameter
+            ---------
+            preds: [batch_size, c, h, w] * 2
+            label: [batch, 1, h, w]
             """
+            inter_y, y = preds
             label = continuous2discrete(label, self.min_depth, self.max_depth, self.num_classes)
             # image loss
-            image_loss = self.AppearanceLoss(pred, label.squeeze(1).long())
-            return image_loss
+            loss1 = self.AuxiliaryLoss(inter_y, label.squeeze(1).long())
+            loss2 = self.AppearanceLoss(y, label.squeeze(1).long())
+            total_loss = self.alpha * loss1 + loss2
+            return loss1, loss2, total_loss
     

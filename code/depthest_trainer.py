@@ -68,7 +68,6 @@ class DepthEstimationTrainer(Trainer):
         for k, v in vars(self.params).items():
             self.print('{0:<22s} : {1:}'.format(k, v))
         
-
     def train(self):
         torch.backends.cudnn.benchmark = True
         if self.logdir:
@@ -82,9 +81,9 @@ class DepthEstimationTrainer(Trainer):
         self.n_steps = self.max_epochs * self.steps_per_epoch
         self.print("{0:<22s} : {1:} ".format('trainset sample', self.n_train))
         # calculate model parameters memory
-        # para = sum([np.prod(list(p.size())) for p in self.net.parameters()])
-        # memory = para * 4 / (1024**2)
-        # self.print('Model {} : params: {:,}, Memory {:.3f}MB'.format(self.net._get_name(), para, memory))
+        para = sum([np.prod(list(p.size())) for p in self.net.parameters()])
+        memory = para * 4 / (1024**2)
+        self.print('Model {} : params: {:,}, Memory {:.3f}MB'.format(self.net._get_name(), para, memory))
         # GO!!!!!!!!!
         start_time = time.time()
         self.train_total_time = 0
@@ -123,7 +122,7 @@ class DepthEstimationTrainer(Trainer):
             before_op_time = time.time()
             self.optimizer.zero_grad()
             output = self.net(images)
-            total_loss = self.criterion(output, labels.squeeze())
+            loss1, loss2, total_loss = self.criterion(output, labels.squeeze())
             total_loss.backward()
             self.optimizer.step()
             fps = images.shape[0] / (time.time() - before_op_time)
@@ -133,14 +132,16 @@ class DepthEstimationTrainer(Trainer):
             if self.verbose > 0 and (step + 1) % (self.steps_per_epoch // self.verbose) == 0:
                 if self.params.classifier == 'OHEM':
                     ratio = self.criterion.AppearanceLoss.ohem_ratio
-                    print_str = 'Epoch[{:>2}/{:>2}] | Step[{:>4}/{:>4}] | fps {:4.2f} | Loss: {:7.3f} | elapsed {:.2f}h | left {:.2f}h | OHEM {:.4f} | lr {:.3e}'. \
-                        format(epoch, self.max_epochs, step + 1, self.steps_per_epoch, fps, total_loss, time_sofar, time_left, ratio, lr)
+                    print_str = 'Epoch[{:>2}/{:>2}] | Step[{:>4}/{:>4}] | fps {:4.2f} | Loss1 {:7.3f} | Loss2 {:7.3f} | elapsed {:.2f}h | left {:.2f}h | OHEM {:.4f} | lr {:.3e}'. \
+                        format(epoch, self.max_epochs, step + 1, self.steps_per_epoch, fps, loss1, loss2, time_sofar, time_left, ratio, lr)
                     self.writer.add_scalar('OHEM', ratio)
                 else:
-                    print_str = 'Epoch[{:>2}/{:>2}] | Step[{:>4}/{:>4}] | fps {:4.2f} | Loss: {:7.3f} | elapsed {:.2f}h | left {:.2f}h | lr {:.3e}'. \
-                        format(epoch, self.max_epochs, step + 1, self.steps_per_epoch, fps, total_loss, time_sofar, time_left, lr)
+                    print_str = 'Epoch[{:>2}/{:>2}] | Step[{:>4}/{:>4}] | fps {:4.2f} | Loss1 {:7.3f} | Loss2 {:7.3f} | elapsed {:.2f}h | left {:.2f}h | lr {:.3e}'. \
+                        format(epoch, self.max_epochs, step + 1, self.steps_per_epoch, fps, loss1, loss2, time_sofar, time_left, lr)
                 self.print(print_str)
-            self.writer.add_scalar('loss', total_loss, self.global_step)
+            self.writer.add_scalar('loss1', loss1, self.global_step)
+            self.writer.add_scalar('loss2', loss2, self.global_step)
+            self.writer.add_scalar('total_loss', total_loss, self.global_step)
             self.writer.add_scalar('lr', lr, epoch)
             # Decay Learning Rate
             if self.params.scheduler == 'poly':

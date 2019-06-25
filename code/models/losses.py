@@ -11,7 +11,7 @@ from math import pi, sqrt
 
 safe_log = lambda x: torch.log(torch.clamp(x, 1e-8, 1e8))
 
-class BaseClassifier2d_(nn.Module):
+class _BaseEntropyLoss2d(nn.Module):
     def __init__(self, ignore_index=None, reduction='sum', use_weights=False, weight=None):
         """
         Parameter
@@ -26,7 +26,7 @@ class BaseClassifier2d_(nn.Module):
                 a manual rescaling weight given to each class.
                 If given, has to be a Tensor of size "nclasses"
         """
-        super(BaseClassifier2d_, self).__init__()
+        super(_BaseEntropyLoss2d, self).__init__()
         self.ignore_index = ignore_index
         self.reduction = reduction
         self.use_weights = use_weights
@@ -35,10 +35,19 @@ class BaseClassifier2d_(nn.Module):
             print(weight)
             self.weight = torch.FloatTensor(weight).cuda()
         else:
-            #print("w/o class balance")
+            print("w/o class balance")
             self.weight = None
 
     def get_entropy(self, pred, label):
+        """
+        Return
+        ------
+        entropy : shape [batch_size, h, w, c]
+        Description
+        -----------
+        Information Entropy based loss need to get the entropy according to your implementation, 
+        echo element denotes the loss of a certain position and class.
+        """
         raise NotImplementedError
 
     def forward(self, pred, label):
@@ -56,38 +65,36 @@ class BaseClassifier2d_(nn.Module):
         assert pred.size(3) == label.size(2), "{0} vs {1} ".format(pred.size(3), label.size(3))
 
         n, c, h, w = pred.size()
-        if self.use_weights and self.weight is None:
-            print('label size {}'.format(label.shape))
-            freq = np.zeros(c)
-            for k in range(c):
-                mask = (label[:, :, :] == k)
-                freq[k] = torch.sum(mask)
-                print('{}th frequency {}'.format(k, freq[k]))
-            weight = freq / np.sum(freq) * c
-            weight = np.median(weight) / weight
-            self.weight = torch.FloatTensor(weight).cuda()
-            print('Online class weight: {}'.format(self.weight))
+        if self.use_weights:
+            if self.weight is None:
+                print('label size {}'.format(label.shape))
+                freq = np.zeros(c)
+                for k in range(c):
+                    mask = (label[:, :, :] == k)
+                    freq[k] = torch.sum(mask)
+                    print('{}th frequency {}'.format(k, freq[k]))
+                weight = freq / np.sum(freq) * c
+                weight = np.median(weight) / weight
+                self.weight = torch.FloatTensor(weight).cuda()
+                print('Online class weight: {}'.format(self.weight))
         else:
             self.weight = 1
+        if self.ignore_index is None:
+            self.ignore_index = c + 1
 
         entropy = self.get_entropy(pred, label)
 
-        if self.ignore_index != None:
-            mask = (label != self.ignore_index).float()
-        else:
-            mask = torch.ones_like(label, dtype=torch.float)
-
+        mask = label != self.ignore_index
         weighted_entropy = entropy * self.weight
+
         if self.reduction == 'sum':
-            pixel_loss = torch.sum(weighted_entropy, -1) * mask
-            loss = torch.sum(pixel_loss) / mask.sum()
+            loss = torch.sum(weighted_entropy, -1)[mask].mean()
         elif self.reduction == 'mean':
-            pixel_loss = torch.mean(weighted_entropy, -1) * mask
-            loss = torch.sum(pixel_loss) / mask.sum()
+            loss = torch.mean(weighted_entropy, -1)[mask].mean()
         return loss
 
 
-class OrdinalRegression2d(BaseClassifier2d_):
+class OrdinalRegression2d(_BaseEntropyLoss2d):
     def __init__(self, ignore_index=None, reduction='sum', use_weights=False, weight=None):
         super(OrdinalRegression2d, self).__init__(ignore_index, reduction, use_weights, weight)
 
@@ -104,7 +111,7 @@ def NormalDist(x, sigma):
     f = torch.exp(-x**2/(2*sigma**2)) / sqrt(2*pi*sigma**2)
     return f
 
-class CrossEntropy2d(BaseClassifier2d_):
+class CrossEntropy2d(_BaseEntropyLoss2d):
     def __init__(self, ignore_index=None, reduction='sum', use_weights=False, weight=None,
                  eps=0.0, priorType='uniform'):
         """
