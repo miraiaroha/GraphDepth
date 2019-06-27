@@ -13,8 +13,8 @@ NUM_CLASSES=80
 # replace the DATA_DIR with your folder path to the dataset.
 RGB_DIR="~/myDataset/NYU_v2/"
 DEP_DIR="~/myDataset/NYU_v2/"
-TRAIN_RGB_TXT="../datasets/nyu_path/train_rgb.txt"
-TRAIN_DEP_TXT="../datasets/nyu_path/train_depth.txt" 
+TRAIN_RGB_TXT="../datasets/nyu_path/train_rgb_12k.txt"
+TRAIN_DEP_TXT="../datasets/nyu_path/train_depth_12k.txt" 
 VAL_RGB_TXT="../datasets/nyu_path/valid_rgb.txt"
 VAL_DEP_TXT="../datasets/nyu_path/valid_depth.txt"
 # training settings
@@ -31,8 +31,8 @@ THREADS=4
 OPTIMIZER="sgd"
 SCHEDULER="poly"
 POWER=0.9
-USE_WEIGHTS=True
-CLASSIFIER="CE"
+USE_WEIGHTS=False
+CLASSIFIER="OR"
 INFERENCE="soft"
 EPS=0.0
 PRIOR="gaussian"
@@ -40,7 +40,7 @@ OHEMTHRES=0.7
 OHEMKEEP=100000
 # set the output path of checkpoints, training log.
 WORKSPACE_DIR="../workspace/"
-LOG_DIR="log_${ENCODER}${DECODER}_${DATASET}_${CLASSIFIER}_190625"
+LOG_DIR="log_${ENCODER}${DECODER}_${DATASET}_${CLASSIFIER}_190627a"
 ########################################################################################################################
 #  Training
 ########################################################################################################################
@@ -67,7 +67,7 @@ TEST_USE_FLIP=True
 TEST_USE_MS=True
 INFERENCE='soft'
 TEST_CHECKPOINT="best.pkl"
-TEST_RESTORE_FROM="${WORKSPACE_DIR}${TRAIN_LOG_DIR}/${TEST_CHECKPOINT}"
+TEST_RESTORE_FROM="${WORKSPACE_DIR}${LOG_DIR}/${TEST_CHECKPOINT}"
 $PYTHON -u depthest_main.py --mode $MODE --encoder $ENCODER --decoder $DECODER --classifier $CLASSIFIER --inference $INFERENCE --classes $NUM_CLASSES \
                             --dataset $DATASET --rgb-dir $RGB_DIR --dep-dir $DEP_DIR --test-rgb $TEST_RGB_TXT --test-dep $TEST_DEP_TXT \
                             --gpu $GPU --use-flip $TEST_USE_FLIP --use-ms $TEST_USE_MS --logdir $LOG_DIR --resdir $TEST_RES_DIR  \

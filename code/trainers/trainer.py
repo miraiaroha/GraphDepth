@@ -215,8 +215,9 @@ class Trainer(object):
         self.print('=> Checkpoint was saved successfully!')
 
     def _save_checkpoint(self, epoch, acc):
-        """Saves a checkpoint of the network and other variables.
-           Only save the best and latest epoch.
+        """
+        Saves a checkpoint of the network and other variables.
+        Only save the best and latest epoch.
         """
         net_type = type(self.net).__name__
         if epoch - self.eval_freq != self.best_epoch:
@@ -251,18 +252,21 @@ class Trainer(object):
             raise Exception("Resume doesn't exist!")
 
     def _load_checkpoint(self, checkpoint=None, mode='finetune'):
-        """checkpoint:
-                Loads a network checkpoint file. Can be called in three different ways:
-                    _load_checkpoint(epoch_num):
-                        Loads the network at the given epoch number (int).
-                    _load_checkpoint(path_to_checkpoint):
-                        Loads the file from the given absolute path (str).
-                    _load_checkpoint(net):
-                        Loads the parameters from the given net (nn.Module).
-            mode:
-                'fintune': load the pretrained model and start training from epoch 1,
-                'retain': reload the model and restart training from the breakpoint. 
-                'test': just testing the model.
+        """
+        Parameters
+        ----------
+        checkpoint:
+            Loads a network checkpoint file. Can be called in three different ways:
+                _load_checkpoint(epoch_num):
+                    Loads the network at the given epoch number (int).
+                _load_checkpoint(path_to_checkpoint):
+                    Loads the file from the given absolute path (str).
+                _load_checkpoint(net):
+                    Loads the parameters from the given net (nn.Module).
+        mode:
+            'fintune': load the pretrained model and start training from epoch 1,
+            'retain': reload the model and restart training from the breakpoint. 
+            'test': just testing the model.
         """
         net_type = type(self.net).__name__
         if isinstance(checkpoint, nn.Module):

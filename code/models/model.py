@@ -75,7 +75,7 @@ class BaseClassificationModel_(nn.Module):
 
     def inference(self, y):
         if isinstance(y, list):
-            y = y[1]
+            y = y[-1]
         # mode
         # OR = Ordinal Regression
         # CE = Cross Entropy

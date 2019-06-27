@@ -60,10 +60,9 @@ class DepthEstimationTrainer(Trainer):
             from torchstat import stat
             import tensorwatch as tw
             #net_copy = deepcopy(self.net)
-            #stat(net_copy, (3, *self.datasets[sets[0]].input_size))
+            stat(self.net, (3, *self.datasets[sets[0]].input_size))
             tw.draw_model(self.net, (1, 3, *self.datasets[sets[0]].input_size))
             #del net_copy
-            #exit()
         self.print('###### Experiment Parameters ######')
         for k, v in vars(self.params).items():
             self.print('{0:<22s} : {1:}'.format(k, v))
@@ -103,8 +102,9 @@ class DepthEstimationTrainer(Trainer):
                     self.writer.add_scalar(k, measures[k], epoch)
         self.print("Finished training! Best epoch {} best acc {:.4f}".format(self.best_epoch, self.best_acc))
         self.print("Spend time: {:.2f}h".format((time.time() - start_time) / 3600))
+        net_type = type(self.net).__name__
         best_pkl = os.path.join(self.logdir, '{}_{:03d}.pkl'.format(net_type, self.best_epoch))
-        modify = os.path.join(self.logdir, '{}_best.pkl'.format(net_type))
+        modify = os.path.join(self.logdir, 'best.pkl')
         shutil.copyfile(best_pkl, modify)
         return
 
@@ -159,8 +159,8 @@ class DepthEstimationTrainer(Trainer):
         self.print("<-------------Evaluate the model-------------->")
         # Evaluate one epoch
         measures, fps = self.eval_epoch(epoch)
-        acc = measures['a1']
         measures = {key: round(value/self.n_val, 5) for key, value in measures.items()}
+        acc = measures['a1']
         self.print('The {}th epoch, fps {:4.2f} | {}'.format(epoch, fps, measures))
         # Save the checkpoint
         if self.logdir:
@@ -228,13 +228,11 @@ class DepthEstimationTrainer(Trainer):
                 images, labels = data[0].to(device), data[1].to(device)
                 before_op_time = time.time()
                 if self.params.use_ms: 
-                    output = predict_multi_scale(self.net, images, ([0.75, 1, 1.25]), 
+                    depths = predict_multi_scale(self.net, images, ([0.75, 1, 1.25]), 
                         self.params.classes, self.params.use_flip)
                 else:
-                    output = predict_multi_scale(self.net, images, [1], 
+                    depths = predict_multi_scale(self.net, images, [1], 
                         self.params.classes, self.params.use_flip)
-                # forward
-                depths = self.net.inference(torch.from_numpy(output).float().to(device))
                 duration = time.time() - before_op_time
                 test_total_time += duration
                 # accuracy
