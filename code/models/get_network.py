@@ -10,6 +10,9 @@ def create_network(args):
     else:
         raise RuntimeError('network not found.' +
                            'The network must be either of resnet50 or resnet101.')
+    net_kwargs = {'min_depth': args.min_depth, 'max_depth': args.max_depth, 'num_classes': args.classes,
+                  'classifierType': args.classifier, 'inferenceType': args.inference, 'decoderType': args.decoder,
+                  'alpha': args.alpha, 'beta': args.beta, 'layers': setttings}
 
-    net = ResNet(args.min_depth, args.max_depth, args.classes, args.classifier, args.inference, args.decoder, setttings)
+    net = ResNet(**net_kwargs)
     return net

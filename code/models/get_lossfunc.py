@@ -2,7 +2,7 @@
 ## Created by: chenyuru
 ## This source code is licensed under the MIT-style license
 ##+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-from .losses import OrdinalRegression2d, CrossEntropy2d, OhemCrossEntropy2d
+from .losses import OrdinalRegression2d, CrossEntropy2d, OhemCrossEntropy2d, AttentionLoss2d
 import json
 
 def create_lossfunc(args, net):
@@ -21,19 +21,21 @@ def create_lossfunc(args, net):
         
     loss_kwargs = {'ignore_index': ignore_index, 'reduction': 'sum', 'use_weights': args.use_weights, 'weight': weight}
 
-    auxlossfunc = CrossEntropy2d(eps=args.eps, priorType=args.prior, **loss_kwargs)
+    auxfunc = CrossEntropy2d(eps=args.eps, priorType=args.prior, **loss_kwargs)
     if args.classifier == 'CE':
         lossfunc = CrossEntropy2d(eps=args.eps, priorType=args.prior, **loss_kwargs)
     elif args.classifier == 'OHEM':
         lossfunc = OhemCrossEntropy2d(eps=args.eps, priorType=args.prior, thresh=args.ohem_thres, min_kept=args.ohem_keep, **loss_kwargs)
     elif args.classifier == 'OR':
         lossfunc = OrdinalRegression2d(**loss_kwargs)
-        auxlossfunc = OrdinalRegression2d(**loss_kwargs)
+        auxfunc = OrdinalRegression2d(**loss_kwargs)
     else:
-        raise RuntimeError('classifier not found.' +
-                    'The classifier must be either of OR, CE or OHEM.')
+        raise RuntimeError('classifier not found. The classifier must be either of OR, CE or OHEM.')
+
+    attfunc = AttentionLoss2d(scale=1)
         
     criterion_kwargs = {'min_depth': args.min_depth, 'max_depth': args.max_depth, 'num_classes': args.classes, 
-                        'AppearanceLoss': lossfunc, 'AuxiliaryLoss': auxlossfunc, 'alpha': args.alpha}
+                        'AppearanceLoss': lossfunc, 'AuxiliaryLoss': auxfunc, 'AttentionLoss': attfunc,
+                        'alpha': args.alpha, 'beta': args.beta}
     criterion = net.LossFunc(**criterion_kwargs)
     return criterion

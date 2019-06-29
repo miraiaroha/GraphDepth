@@ -25,13 +25,15 @@ def discrete2continuous(depth, d_min, d_max, n_c):
     return depth
 
 class BaseClassificationModel_(nn.Module):
-    def __init__(self, min_depth, max_depth, num_classes, classifierType, inferenceType):
+    def __init__(self, min_depth, max_depth, num_classes, 
+                 classifierType, inferenceType, decoderType):
         super().__init__()
         self.min_depth = min_depth
         self.max_depth = max_depth
         self.num_classes = num_classes
         self.classifierType = classifierType
         self.inferenceType = inferenceType
+        self.decoderType = decoderType
 
     def decode_ord(self, y):
         batch_size, prob, height, width = y.shape
@@ -107,20 +109,19 @@ def make_decoder(command='attention'):
                            'The decoder must be either graph or attention.')
     return dec()
 
-def make_classifier(classifierType='OR', num_classes=80, channel1=1024, channel2=512):
+def make_classifier(classifierType='OR', num_classes=80, use_inter=False, channel1=1024, channel2=2048):
     classes = 2 * num_classes if classifierType == 'OR' else num_classes
-
-    interout = nn.Sequential(OrderedDict([
-        ('conv_1',   nn.Conv2d(channel1, channel1//2, kernel_size=3, stride=1, padding=1)),
-        ('bn',       nn.BatchNorm2d(channel1//2)),
-        ('dropout',  nn.Dropout2d(0.10)),
-        ('conv_2',   nn.Conv2d(channel1//2, classes, kernel_size=1, stride=1, padding=0, bias=True)),
-        ('upsample', nn.Upsample(scale_factor=8, mode='bilinear', align_corners=True))]))
-
+    interout = None
+    if use_inter:
+        interout = nn.Sequential(OrderedDict([
+            ('dropout1', nn.Dropout2d(0.2, inplace=True)),
+            ('conv1',    nn.Conv2d(channel1, channel1//2, kernel_size=3, stride=1, padding=1)),
+            ('relu',     nn.ReLU(inplace=True)),
+            ('dropout2', nn.Dropout2d(0.2, inplace=False)),
+            ('upsample', nn.Upsample(scale_factor=8, mode='bilinear', align_corners=True))]))
     classifier = nn.Sequential(OrderedDict([
-        ('conv',     nn.Conv2d(channel2, classes, kernel_size=3, stride=1, padding=1)),
+        ('conv',     nn.Conv2d(channel2, classes, kernel_size=1, stride=1, padding=0)),
         ('upsample', nn.Upsample(scale_factor=8, mode='bilinear', align_corners=True))]))
-    
     return [interout, classifier]
 
 class Bottleneck(nn.Module):
@@ -160,10 +161,12 @@ class Bottleneck(nn.Module):
 class ResNet(BaseClassificationModel_):
     def __init__(self, min_depth, max_depth, num_classes,
                  classifierType, inferenceType, decoderType,
+                 alpha=0, beta=0,
                  layers=[3, 4, 6, 3], 
                  block=Bottleneck):
         # Note: classifierType: CE=Cross Entropy, OR=Ordinal Regression
-        super(ResNet, self).__init__(min_depth, max_depth, num_classes, classifierType, inferenceType)
+        super(ResNet, self).__init__(min_depth, max_depth, num_classes, 
+                                     classifierType, inferenceType, decoderType)
         self.inplanes = 64
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7,stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
@@ -174,8 +177,11 @@ class ResNet(BaseClassificationModel_):
         self.layer3 = self._make_layer(block, 256, layers[2], stride=1, dilation=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=1, dilation=4)
         
+        self.alpha = alpha
+        self.beta = beta
         self.decoder = make_decoder(decoderType)
-        self.interout, self.classifier = make_classifier(classifierType, num_classes, channel1=1024, channel2=512)
+        self.use_inter = self.alpha != 0.0
+        self.interout, self.classifier = make_classifier(classifierType, num_classes, self.use_inter, channel1=1024, channel2=2048)
         self.parameter_initialization()
 
     def parameter_initialization(self):
@@ -211,38 +217,54 @@ class ResNet(BaseClassificationModel_):
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
-        inter_y = self.interout(x)
+        inter_y = None
+        if self.use_inter:
+            inter_y = self.interout(x)
         x = self.layer4(x)
-        x = self.decoder(x)
+        if self.decoderType == 'attention':
+            x, sim_map = self.decoder(x)
         y = self.classifier(x)
         if self.classifierType == 'OR':
             y = self.decode_ord(y)
-            inter_y = self.decode_ord(inter_y)
-        return [inter_y, y]
+            if self.use_inter:
+                inter_y = self.decode_ord(inter_y)
+        
+        return [inter_y, sim_map, y]
 
     class LossFunc(nn.Module):
         def __init__(self, min_depth, max_depth, num_classes, 
-                     AppearanceLoss=None, AuxiliaryLoss=None, alpha=0.4):
+                     AppearanceLoss=None, AuxiliaryLoss=None, AttentionLoss=None,
+                     alpha=0., beta=0.):
             super(ResNet.LossFunc, self).__init__()
             self.min_depth = min_depth
             self.max_depth = max_depth
             self.num_classes = num_classes
             self.alpha = alpha
+            self.beta = beta
             self.AppearanceLoss = AppearanceLoss
             self.AuxiliaryLoss = AuxiliaryLoss
+            self.AttentionLoss = AttentionLoss
 
-        def forward(self, preds, label):
+        def forward(self, preds, label, epoch):
             """
             Parameter
             ---------
-            preds: [batch_size, c, h, w] * 2
-            label: [batch, 1, h, w]
+            preds: [batch_size, c, h, w] * 2 + sim_map
+            label: [batch_size, 1, h, w]
+            sim_map 
             """
-            inter_y, y = preds
-            label = continuous2discrete(label, self.min_depth, self.max_depth, self.num_classes)
+            inter_y, sim_map, y = preds
+            dis_label = continuous2discrete(label, self.min_depth, self.max_depth, self.num_classes)
             # image loss
-            loss1 = self.AuxiliaryLoss(inter_y, label.squeeze(1).long())
-            loss2 = self.AppearanceLoss(y, label.squeeze(1).long())
-            total_loss = self.alpha * loss1 + loss2
-            return loss1, loss2, total_loss
+            loss1 = self.AppearanceLoss(y, dis_label.squeeze(1).long())
+            # intermediate supervision loss
+            loss2 = 0
+            if self.alpha != 0.:
+                loss2 = self.AuxiliaryLoss(inter_y, dis_label.squeeze(1).long())
+            # attention loss
+            loss3 = 0
+            if self.beta != 0. and epoch > 38:
+                loss3 = self.AttentionLoss(sim_map, label)
+            total_loss = loss1 + self.alpha * loss2 + self.beta * loss3
+            return loss1, loss2, loss3, total_loss
     

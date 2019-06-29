@@ -11,11 +11,61 @@ from math import pi, sqrt
 
 safe_log = lambda x: torch.log(torch.clamp(x, 1e-8, 1e8))
 
+class _BaseKLDivergence(nn.Module):
+    def __init__(self):
+        super(_BaseKLDivergence, self).__init__()
+
+    def forward(self, Q, P):
+        """
+        Parameters
+        ----------
+        P: ground truth probability distribution [batch_size, n, n]
+        Q: predicted probability distribution [batch_size, n, n]
+
+        Description
+        -----------
+        compute the KL divergence of attention maps. Here P and Q denote 
+        the pixel-level attention map with n spatial positions.
+        """
+        kl_loss = P * safe_log(P / Q)
+        pixel_loss = torch.sum(kl_loss, dim=-1)
+        total_loss = torch.mean(pixel_loss)
+        return total_loss
+
+class AttentionLoss2d(_BaseKLDivergence):
+    def __init__(self, scale=1):
+        super(AttentionLoss2d, self).__init__()
+        self.scale = scale
+
+    def get_similarity(self, depth):
+        b, _, h, w = depth.shape
+        M = depth.reshape((b, h * w, 1))
+        N = depth.reshape((b, 1, h * w))
+        W = F.softmax(torch.abs(torch.log(M) - torch.log(N)), -1)
+        W[torch.isnan(W)] = 0
+        return W
+
+    def get_gt_sim_map(self, label):
+        b, _, h, w = label.shape
+        res_label = F.interpolate(label, size=(h//8//self.scale, w//8//self.scale), mode='nearest')
+        gt_sim_map = self.get_similarity(res_label)
+        return gt_sim_map
+    
+    def forward(self, sim_map, label):
+        """
+        Parameters
+        ----------
+        sim_map: [batch_size, n, n]
+        label: [batch_size, 1, h, w]
+        """
+        gt_sim_map = self.get_gt_sim_map(label)
+        return super(AttentionLoss2d, self).forward(sim_map, gt_sim_map)
+
 class _BaseEntropyLoss2d(nn.Module):
     def __init__(self, ignore_index=None, reduction='sum', use_weights=False, weight=None):
         """
-        Parameter
-        ---------
+        Parameters
+        ----------
         ignore_index : Specifies a target value that is ignored
                        and does not contribute to the input gradient
         reduction : Specifies the reduction to apply to the output: 
@@ -52,10 +102,10 @@ class _BaseEntropyLoss2d(nn.Module):
 
     def forward(self, pred, label):
         """
-        Parameter
-        ---------
-        pred: [batch, num_classes, h, w]
-        label: [batch, h, w]
+        Parameters
+        ----------
+        pred: [batch_size, num_classes, h, w]
+        label: [batch_size, h, w]
         """
         assert not label.requires_grad
         assert pred.dim() == 4
@@ -115,8 +165,8 @@ class CrossEntropy2d(_BaseEntropyLoss2d):
     def __init__(self, ignore_index=None, reduction='sum', use_weights=False, weight=None,
                  eps=0.0, priorType='uniform'):
         """
-        Parameter
-        ---------
+        Parameters
+        ----------
         eps : label smoothing factor
         prior : prior distribution, if uniform equivalent to the 
                 label smoothing trick (https://arxiv.org/abs/1512.00567).
@@ -150,8 +200,8 @@ class OhemCrossEntropy2d(CrossEntropy2d):
                  eps=0.0, priorType='uniform', thresh=0.6, min_kept=0, 
                  ):
         """
-        Parameter
-        ---------
+        Parameters
+        ----------
         thresh : OHEM (online hard example mining) threshold of correct probability
         min_kept : OHEM of minimal kept pixels
 

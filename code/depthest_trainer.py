@@ -22,7 +22,7 @@ import json
 
 class DepthEstimationTrainer(Trainer):
     def __init__(self, params, net, datasets, criterion, optimizer, scheduler, 
-                 sets=['train', 'val', 'test'], verbose=50, stat=False, 
+                 sets=['train', 'val', 'test'], verbose=100, stat=False, 
                  eval_func=compute_errors, 
                  disp_func=display_figure):
         self.time = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -122,7 +122,7 @@ class DepthEstimationTrainer(Trainer):
             before_op_time = time.time()
             self.optimizer.zero_grad()
             output = self.net(images)
-            loss1, loss2, total_loss = self.criterion(output, labels.squeeze())
+            loss1, loss2, loss3, total_loss = self.criterion(output, labels)
             total_loss.backward()
             self.optimizer.step()
             fps = images.shape[0] / (time.time() - before_op_time)
@@ -132,15 +132,16 @@ class DepthEstimationTrainer(Trainer):
             if self.verbose > 0 and (step + 1) % (self.steps_per_epoch // self.verbose) == 0:
                 if self.params.classifier == 'OHEM':
                     ratio = self.criterion.AppearanceLoss.ohem_ratio
-                    print_str = 'Epoch[{:>2}/{:>2}] | Step[{:>4}/{:>4}] | fps {:4.2f} | Loss1 {:7.3f} | Loss2 {:7.3f} | elapsed {:.2f}h | left {:.2f}h | OHEM {:.4f} | lr {:.3e}'. \
-                        format(epoch, self.max_epochs, step + 1, self.steps_per_epoch, fps, loss1, loss2, time_sofar, time_left, ratio, lr)
+                    print_str = 'Epoch[{:>2}/{:>2}] | Step[{:>4}/{:>4}] | fps {:4.2f} | Loss1 {:7.3f} | Loss2 {:7.3f} | Loss3 {:7.3f} | elapsed {:.2f}h | left {:.2f}h | OHEM {:.4f} | lr {:.3e}'. \
+                        format(epoch, self.max_epochs, step + 1, self.steps_per_epoch, fps, loss1, loss2, loss3, time_sofar, time_left, ratio, lr)
                     self.writer.add_scalar('OHEM', ratio)
                 else:
-                    print_str = 'Epoch[{:>2}/{:>2}] | Step[{:>4}/{:>4}] | fps {:4.2f} | Loss1 {:7.3f} | Loss2 {:7.3f} | elapsed {:.2f}h | left {:.2f}h | lr {:.3e}'. \
-                        format(epoch, self.max_epochs, step + 1, self.steps_per_epoch, fps, loss1, loss2, time_sofar, time_left, lr)
+                    print_str = 'Epoch[{:>2}/{:>2}] | Step[{:>4}/{:>4}] | fps {:4.2f} | Loss1 {:7.3f} | Loss2 {:7.3f} | Loss3 {:7.3f} | elapsed {:.2f}h | left {:.2f}h | lr {:.3e}'. \
+                        format(epoch, self.max_epochs, step + 1, self.steps_per_epoch, fps, loss1, loss2, loss3, time_sofar, time_left, lr)
                 self.print(print_str)
             self.writer.add_scalar('loss1', loss1, self.global_step)
             self.writer.add_scalar('loss2', loss2, self.global_step)
+            self.writer.add_scalar('loss3', loss3, self.global_step)
             self.writer.add_scalar('total_loss', total_loss, self.global_step)
             self.writer.add_scalar('lr', lr, epoch)
             # Decay Learning Rate
@@ -193,7 +194,7 @@ class DepthEstimationTrainer(Trainer):
                 duration = time.time() - before_op_time
                 val_total_time += duration
                 # accuracy
-                new = self.eval_func(labels, depths)
+                new = self.eval_func(labels, depths, epoch)
                 for i in range(len(measure_list)):
                     measures[measure_list[i]] += new[measure_list[i]].item()
                 # display images
