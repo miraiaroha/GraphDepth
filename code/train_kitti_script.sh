@@ -37,6 +37,8 @@ EPS=0.0
 PRIOR="uniform"
 OHEMTHRES=0.7
 OHEMKEEP=100000
+ALPHA=0
+BETA=0.1
 # set the output path of checkpoints, training log.
 WORKSPACE_DIR="../workspace/"
 TRAIN_LOG_DIR="log_${ENCODER}${DECODER}_${DATASET}_${CLASSIFIER}"
@@ -51,7 +53,7 @@ $PYTHON -u depthest_main.py --mode $MODE --encoder $ENCODER --decoder $DECODER -
                             --optimizer $OPTIMIZER --weight-decay $WEIGHT_DECAY --lr $LR --final-lr $FINAL_LR --gpu $GPU \
                             --scheduler $SCHEDULER --power $POWER --random-flip --random-scale --random-rotate --random-jitter --random-crop \
                             --workdir $WORKSPACE_DIR --logdir $LOG_DIR --pretrain --eps $EPS --prior $PRIOR --use-weights $USE_WEIGHTS \
-                            --ohem-thres $OHEMTHRES --ohem-keep $OHEMKEEP 
+                            --ohem-thres $OHEMTHRES --ohem-keep $OHEMKEEP --alpha $ALPHA --beta $BETA &&
 
 ########################################################################################################################
 #  Testing
