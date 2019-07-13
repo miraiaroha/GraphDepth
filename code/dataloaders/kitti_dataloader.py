@@ -32,7 +32,7 @@ class KITTIDataset(MyDataloader):
                  flip=False, rotate=False, scale=False, jitter=False, crop=False,
                  make=make_dataset):
         super(KITTIDataset, self).__init__(root_image, root_depth, image_txt, depth_txt, mode, min_depth, max_depth, make)
-        self.input_size = (160, 596)
+        self.input_size = (160, 592)
         self.flip = flip
         self.rotate = rotate
         self.scale = scale
