@@ -4,7 +4,7 @@ nvidia-smi
 # pytorch 04
 PYTHON="$HOME/anaconda3/envs/tensorflow/bin/python"
 # network config
-ENCODER="resnet50"
+ENCODER="resnet101"
 DECODER="attention"
 DATASET="kitti"
 NUM_CLASSES=80
@@ -16,6 +16,10 @@ TRAIN_RGB_TXT="../datasets/kitti_path/my_train_image_files_45k.txt"
 TRAIN_DEP_TXT="../datasets/kitti_path/my_train_depth_files_45k.txt"
 VAL_RGB_TXT="../datasets/kitti_path/my_test_image_files_500.txt"
 VAL_DEP_TXT="../datasets/kitti_path/my_test_depth_files_500.txt"
+# TRAIN_RGB_TXT="../datasets/kitti_path/eigen_train_files.txt"
+# TRAIN_DEP_TXT="../datasets/kitti_path/eigen_train_depth_files.txt"
+# VAL_RGB_TXT="../datasets/kitti_path/eigen_test_files.txt"
+# VAL_DEP_TXT="../datasets/kitti_path/eigen_test_depth_files.txt"
 # training settings
 MODE="train"
 GPU=True
@@ -23,8 +27,8 @@ EPOCHES=50
 LR=2e-4
 FINAL_LR=2e-3
 WEIGHT_DECAY=5e-4
-BATCHSIZE=8
-BATCHSIZEVAL=8
+BATCHSIZE=6
+BATCHSIZEVAL=6
 EVAL_FREQ=1
 THREADS=4
 OPTIMIZER="sgd"
@@ -51,7 +55,7 @@ $PYTHON -u depthest_main.py --mode $MODE --encoder $ENCODER --decoder $DECODER -
                             --dataset $DATASET --rgb-dir $RGB_DIR --dep-dir $DEP_DIR --train-rgb $TRAIN_RGB_TXT --train-dep $TRAIN_DEP_TXT \
                             --val-rgb $VAL_RGB_TXT --val-dep $VAL_DEP_TXT --batch  $BATCHSIZE --batch-val $BATCHSIZEVAL \
                             --optimizer $OPTIMIZER --weight-decay $WEIGHT_DECAY --lr $LR --final-lr $FINAL_LR --gpu $GPU \
-                            --scheduler $SCHEDULER --power $POWER --random-flip --random-scale --random-rotate --random-jitter --random-crop \
+                            --scheduler $SCHEDULER --power $POWER --random-flip --random-rotate --random-jitter --random-crop \
                             --workdir $WORKSPACE_DIR --logdir $LOG_DIR --pretrain --eps $EPS --prior $PRIOR --use-weights $USE_WEIGHTS \
                             --ohem-thres $OHEMTHRES --ohem-keep $OHEMKEEP --alpha $ALPHA --beta $BETA &&
 
@@ -66,7 +70,7 @@ TEST_RES_DIR="res"
 MODE="test"
 GPU=True
 TEST_USE_FLIP=True
-TEST_USE_MS=True
+TEST_USE_MS=False
 INFERENCE='soft'
 TEST_CHECKPOINT="best.pkl"
 TEST_RESTORE_FROM="${WORKSPACE_DIR}${LOG_DIR}/${TEST_CHECKPOINT}"
