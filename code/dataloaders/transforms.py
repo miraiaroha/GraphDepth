@@ -537,13 +537,16 @@ class Crop(object):
     def __call__(self, img):
         """
         Args:
-            img (numpy.ndarray (C x H x W)): Image to be cropped.
+            img (numpy.ndarray (H x W x C)): Image to be cropped.
         Returns:
-            img (numpy.ndarray (C x H x W)): Cropped image.
+            img (numpy.ndarray (H x W x C)): Cropped image.
         """
 
         i, j, h, w = self.i, self.j, self.h, self.w
-
+        i = 0 if i is None else i
+        j = 0 if j is None else j
+        h = img.shape[0] if h is None else h
+        w = img.shape[1] if w is None else w
         if not(_is_numpy_image(img)):
             raise TypeError('img should be ndarray. Got {}'.format(type(img)))
         if img.ndim == 3:

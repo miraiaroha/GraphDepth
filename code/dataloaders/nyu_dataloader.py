@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import torch
 
 iheight, iwidth = 480, 640 # raw image size
+r_size = 240.0 / iheight
 
 def make_dataset(root, txt):
     with open(txt, 'r') as f:
@@ -37,7 +38,7 @@ class NYUDataset(MyDataloader):
         self.crop = crop
 
     def train_transform(self, rgb, depth):
-        t = [Resize(240.0 / iheight)] # this is for computational efficiency, since rotation can be slow
+        t = [Resize(r_size)] # this is for computational efficiency, since rotation can be slow
         if self.rotate:
             angle = np.random.uniform(-5.0, 5.0) # random rotation degrees
             t.append(Rotate(angle))
@@ -64,7 +65,7 @@ class NYUDataset(MyDataloader):
         return rgb_np, depth_np
 
     def val_transform(self, rgb, depth):
-        transform = Compose([Resize(240.0 / iheight),
+        transform = Compose([Resize(r_size),
                              CenterCrop(self.input_size),
                             ])
         rgb_np = transform(rgb)

@@ -13,6 +13,8 @@ from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 
 iheight, iwidth = 375, 1242 # raw image size
+r_size = (180, 608)
+c_size = (23, 13, 352, 1216)
 
 def make_dataset(root, txt):
     with open(txt, 'r') as f:
@@ -30,7 +32,7 @@ class KITTIDataset(MyDataloader):
                  flip=False, rotate=False, scale=False, jitter=False, crop=False,
                  make=make_dataset):
         super(KITTIDataset, self).__init__(root_image, root_depth, image_txt, depth_txt, mode, min_depth, max_depth, make)
-        self.input_size = (176, 576)
+        self.input_size = (160, 596)
         self.flip = flip
         self.rotate = rotate
         self.scale = scale
@@ -38,9 +40,9 @@ class KITTIDataset(MyDataloader):
         self.crop = crop
 
     def train_transform(self, rgb, depth):
-        # t = [Crop(130, 10, 240, 1200), 
-        #      Resize(180 / 240)] # this is for computational efficiency, since rotation can be slow
-        t = [Resize([180, 596])]
+        t = [Crop(*c_size), 
+             Resize(r_size)] # this is for computational efficiency, since rotation can be slow
+        #t = [Resize(resize)]
         if self.rotate:
             angle = np.random.uniform(-5.0, 5.0) # random rotation degrees
             t.append(Rotate(angle))
@@ -70,8 +72,8 @@ class KITTIDataset(MyDataloader):
         return rgb_np, depth_np
 
     def val_transform(self, rgb, depth):
-        transform = Compose([Crop(130, 10, 240, 1200),
-                             Resize(180 / 240),
+        transform = Compose([Crop(*c_size),
+                             Resize(resize),
                              CenterCrop(self.input_size),
                             ])
         rgb_np = transform(rgb)
