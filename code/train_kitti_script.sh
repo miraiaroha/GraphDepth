@@ -12,10 +12,10 @@ NUM_CLASSES=80
 # replace the DATA_DIR with your folder path to the dataset.
 RGB_DIR="~/myDataset/KITTI/raw_data_KITTI/"
 DEP_DIR="~/myDataset/KITTI/datasets_KITTI/"
-TRAIN_RGB_TXT="../datasets/kitti_path/eigen_train_files.txt"
-TRAIN_DEP_TXT="../datasets/kitti_path/eigen_train_depth_files.txt"
-VAL_RGB_TXT="../datasets/kitti_path/eigen_test_files.txt"
-VAL_DEP_TXT="../datasets/kitti_path/eigen_test_depth_files.txt"
+TRAIN_RGB_TXT="../datasets/kitti_path/my_train_image_files_45k.txt"
+TRAIN_DEP_TXT="../datasets/kitti_path/my_train_depth_files_45k.txt"
+VAL_RGB_TXT="../datasets/kitti_path/my_test_image_files_500.txt"
+VAL_DEP_TXT="../datasets/kitti_path/my_test_depth_files_500.txt"
 # training settings
 MODE="train"
 GPU=True
@@ -23,25 +23,25 @@ EPOCHES=50
 LR=2e-4
 FINAL_LR=2e-3
 WEIGHT_DECAY=5e-4
-BATCHSIZE=8
-BATCHSIZEVAL=8
+BATCHSIZE=6
+BATCHSIZEVAL=6
 EVAL_FREQ=1
 THREADS=4
 OPTIMIZER="sgd"
 SCHEDULER="poly"
 POWER=0.9
 USE_WEIGHTS=False
-CLASSIFIER="CE"
+CLASSIFIER="OR"
 INFERENCE="soft"
 EPS=0.0
 PRIOR="uniform"
 OHEMTHRES=0.7
 OHEMKEEP=100000
 ALPHA=0
-BETA=0.1
+BETA=0
 # set the output path of checkpoints, training log.
 WORKSPACE_DIR="../workspace/"
-TRAIN_LOG_DIR="log_${ENCODER}${DECODER}_${DATASET}_${CLASSIFIER}"
+LOG_DIR="log_${ENCODER}${DECODER}_${DATASET}_${CLASSIFIER}_190713a"
 ########################################################################################################################
 #  Training
 ########################################################################################################################
@@ -59,8 +59,8 @@ $PYTHON -u depthest_main.py --mode $MODE --encoder $ENCODER --decoder $DECODER -
 #  Testing
 ########################################################################################################################
 # dataset
-TEST_RGB_TXT="../datasets/kitti_path/eigen_test_files.txt"
-TEST_DEP_TXT="../datasets/kitti_path/eigen_test_depth_files.txt"
+TEST_RGB_TXT="../datasets/kitti_path/my_test_image_files_500.txt"
+TEST_DEP_TXT="../datasets/kitti_path/my_test_depth_files_500.txt"
 TEST_RES_DIR="res"
 # testing settings
 MODE="test"
@@ -69,7 +69,7 @@ TEST_USE_FLIP=True
 TEST_USE_MS=True
 INFERENCE='soft'
 TEST_CHECKPOINT="best.pkl"
-TEST_RESTORE_FROM="${WORKSPACE_DIR}${TRAIN_LOG_DIR}/${TEST_CHECKPOINT}"
+TEST_RESTORE_FROM="${WORKSPACE_DIR}${LOG_DIR}/${TEST_CHECKPOINT}"
 $PYTHON -u depthest_main.py --mode $MODE --encoder $ENCODER --decoder $DECODER --classifier $CLASSIFIER --inference $INFERENCE --classes $NUM_CLASSES \
                             --dataset $DATASET --rgb-dir $RGB_DIR --dep-dir $DEP_DIR --test-rgb $TEST_RGB_TXT --test-dep $TEST_DEP_TXT \
                             --gpu $GPU --use-flip $TEST_USE_FLIP --use-ms $TEST_USE_MS --logdir $LOG_DIR --resdir $TEST_RES_DIR  \

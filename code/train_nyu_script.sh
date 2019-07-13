@@ -5,7 +5,7 @@ nvidia-smi
 PYTHON="$HOME/anaconda3/envs/tensorflow/bin/python"
 ##### experimental settings
 # network config
-ENCODER="resnet50"
+ENCODER="resnet101"
 DECODER="attention"
 DATASET="nyu"
 NUM_CLASSES=80
@@ -13,19 +13,19 @@ NUM_CLASSES=80
 # replace the DATA_DIR with your folder path to the dataset.
 RGB_DIR="~/myDataset/NYU_v2/"
 DEP_DIR="~/myDataset/NYU_v2/"
-TRAIN_RGB_TXT="../datasets/nyu_path/train_rgb.txt"
-TRAIN_DEP_TXT="../datasets/nyu_path/train_depth.txt" 
+TRAIN_RGB_TXT="../datasets/nyu_path/train_rgb_12k.txt"
+TRAIN_DEP_TXT="../datasets/nyu_path/train_depth_12k.txt" 
 VAL_RGB_TXT="../datasets/nyu_path/valid_rgb.txt"
 VAL_DEP_TXT="../datasets/nyu_path/valid_depth.txt"
 # training settings
 MODE="train"
 GPU=True
-EPOCHES=50
-LR=2e-4
+EPOCHES=10
+LR=1e-5
 FINAL_LR=2e-3
 WEIGHT_DECAY=5e-4
-BATCHSIZE=10
-BATCHSIZEVAL=8
+BATCHSIZE=6
+BATCHSIZEVAL=6
 EVAL_FREQ=1
 THREADS=4
 OPTIMIZER="sgd"
@@ -39,10 +39,11 @@ PRIOR="gaussian"
 OHEMTHRES=0.7
 OHEMKEEP=100000
 ALPHA=0
-BETA=0.1
+BETA=1
 # set the output path of checkpoints, training log.
 WORKSPACE_DIR="../workspace/"
-LOG_DIR="log_${ENCODER}${DECODER}_${DATASET}_${CLASSIFIER}_190629a"
+LOG_DIR="log_${ENCODER}${DECODER}_${DATASET}_${CLASSIFIER}_190703a_finetune"
+RESUME="${WORKSPACE_DIR}log_${ENCODER}${DECODER}_${DATASET}_${CLASSIFIER}_190703a/best.pkl"
 ########################################################################################################################
 #  Training
 ########################################################################################################################
@@ -51,9 +52,9 @@ $PYTHON -u depthest_main.py --mode $MODE --encoder $ENCODER --decoder $DECODER -
                             --dataset $DATASET --rgb-dir $RGB_DIR --dep-dir $DEP_DIR --train-rgb $TRAIN_RGB_TXT --train-dep $TRAIN_DEP_TXT \
                             --val-rgb $VAL_RGB_TXT --val-dep $VAL_DEP_TXT --batch  $BATCHSIZE --batch-val $BATCHSIZEVAL \
                             --optimizer $OPTIMIZER --weight-decay $WEIGHT_DECAY --lr $LR --final-lr $FINAL_LR --gpu $GPU \
-                            --scheduler $SCHEDULER --power $POWER --random-flip --random-scale --random-rotate --random-jitter --random-crop \
+                            --scheduler $SCHEDULER --power $POWER --random-flip --random-jitter --random-crop \
                             --workdir $WORKSPACE_DIR --logdir $LOG_DIR --pretrain --eps $EPS --prior $PRIOR --use-weights $USE_WEIGHTS \
-                            --ohem-thres $OHEMTHRES --ohem-keep $OHEMKEEP --alpha $ALPHA --beta $BETA &&
+                            --ohem-thres $OHEMTHRES --ohem-keep $OHEMKEEP --alpha $ALPHA --beta $BETA --resume $RESUME &&
 
 ########################################################################################################################
 #  Testing

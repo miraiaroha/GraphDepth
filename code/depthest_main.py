@@ -29,7 +29,10 @@ def train(args, net, datasets, criterion, optimizer, scheduler):
             resnet = models.resnet50(pretrained=True)
         elif args.encoder == 'resnet101':
             resnet = models.resnet101(pretrained=True)
-        Trainer.reload(resume=resnet, mode='finetune')
+        if args.resume is not None:
+            Trainer.reload(resume=args.resume, mode='finetune')
+        else:
+            Trainer.reload(resume=resnet, mode='finetune')
     elif args.retain:
         Trainer.reload(resume=args.resume, mode='retain')
     Trainer.train()

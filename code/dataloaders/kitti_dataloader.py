@@ -30,7 +30,7 @@ class KITTIDataset(MyDataloader):
                  flip=False, rotate=False, scale=False, jitter=False, crop=False,
                  make=make_dataset):
         super(KITTIDataset, self).__init__(root_image, root_depth, image_txt, depth_txt, mode, min_depth, max_depth, make)
-        self.input_size = (160, 640)
+        self.input_size = (176, 576)
         self.flip = flip
         self.rotate = rotate
         self.scale = scale
@@ -38,13 +38,14 @@ class KITTIDataset(MyDataloader):
         self.crop = crop
 
     def train_transform(self, rgb, depth):
-        t = [Crop(130, 10, 240, 1200), 
-             Resize(180 / 240)] # this is for computational efficiency, since rotation can be slow
+        # t = [Crop(130, 10, 240, 1200), 
+        #      Resize(180 / 240)] # this is for computational efficiency, since rotation can be slow
+        t = [Resize([180, 596])]
         if self.rotate:
             angle = np.random.uniform(-5.0, 5.0) # random rotation degrees
             t.append(Rotate(angle))
         if self.scale:
-            s = np.random.uniform(1.0, 1.5) # random scaling
+            s = np.random.uniform(1.0, 1.25) # random scaling
             depth = depth / s
             t.append(Resize(s))
         if self.crop: # random crop

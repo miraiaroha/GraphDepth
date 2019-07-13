@@ -170,13 +170,13 @@ class ResNet(BaseClassificationModel_):
         self.inplanes = 64
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7,stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
-        self.relu1 = nn.ReLU(inplace=True)
+        self.relu1 = nn.ReLU(True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=1, dilation=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=1, dilation=4)
-        
+
         self.alpha = alpha
         self.beta = beta
         self.decoder = make_decoder(decoderType)
@@ -228,7 +228,6 @@ class ResNet(BaseClassificationModel_):
             y = self.decode_ord(y)
             if self.use_inter:
                 inter_y = self.decode_ord(inter_y)
-        
         return [inter_y, sim_map, y]
 
     class LossFunc(nn.Module):
@@ -263,8 +262,8 @@ class ResNet(BaseClassificationModel_):
                 loss2 = self.AuxiliaryLoss(inter_y, dis_label.squeeze(1).long())
             # attention loss
             loss3 = 0
-            if self.beta != 0. and epoch > 38:
-                loss3 = self.AttentionLoss(sim_map, label)
+            if self.beta != 0.:
+                loss3 = self.AttentionLoss(sim_map, dis_label)
             total_loss = loss1 + self.alpha * loss2 + self.beta * loss3
             return loss1, loss2, loss3, total_loss
     

@@ -1,12 +1,12 @@
 #! /bin/bash
 PYTHON="$HOME/anaconda3/envs/tensorflow/bin/python"
 # network config
-ENCODER="resnet50"
+ENCODER="resnet101"
 DECODER="attention"
 DATASET="nyu"
 NUM_CLASSES=80
 ## experimental settings
-CLASSIFIER="CE"
+CLASSIFIER="OR"
 INFERENCE="soft"
 NUM_CLASSES=80
 # dataset
@@ -23,7 +23,7 @@ TEST_USE_MS=True
 INFERENCE='soft'
 # set the output path of checkpoints, training log.
 WORKSPACE_DIR="../workspace/"
-LOG_DIR="log_${ENCODER}${DECODER}_${DATASET}_${CLASSIFIER}_190625b"
+LOG_DIR="log_${ENCODER}${DECODER}_${DATASET}_${CLASSIFIER}_190703a"
 TEST_CHECKPOINT="best.pkl"
 TEST_RESTORE_FROM="${WORKSPACE_DIR}${LOG_DIR}/${TEST_CHECKPOINT}"
 $PYTHON -u depthest_main.py --mode $MODE --encoder $ENCODER --decoder $DECODER --classifier $CLASSIFIER --inference $INFERENCE --classes $NUM_CLASSES \

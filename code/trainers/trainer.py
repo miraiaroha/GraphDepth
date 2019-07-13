@@ -78,7 +78,6 @@ class Trainer(object):
         self.best_acc = 0
         self.start_epoch = 1
         self.global_step = 1
-        #self.stats = {}
         # trainloader
         if 'train' in self.sets and self.datasets['train'] is not None:
             self.trainset = self.datasets[self.sets[0]]
@@ -86,7 +85,7 @@ class Trainer(object):
                                       shuffle=True, num_workers=self.threads, 
                                       pin_memory=True, drop_last=False,
                                       worker_init_fn=lambda work_id:np.random.seed(work_id))
-        elif self.params.mode != 'test':
+        elif self.mode != 'test':
             raise Exception("train set not found!")
         # valloader
         if 'train' in self.sets and self.datasets['val'] is not None:        
@@ -95,7 +94,7 @@ class Trainer(object):
                                       shuffle=False, num_workers=self.threads, 
                                       pin_memory=Trainer, drop_last=False,
                                       worker_init_fn=lambda work_id:np.random.seed(work_id))
-        elif self.params.mode != 'test':
+        elif self.mode != 'test':
             raise Exception("Val set not found!")
         # testloader
         if 'test' in self.sets and self.datasets['test'] is not None:
@@ -111,7 +110,7 @@ class Trainer(object):
         if self.logdir is not None:
             if not os.path.exists(self.logdir):
                 os.mkdir(self.logdir)
-            logging = init_log(self.logdir, self.time, self.params.mode)
+            logging = init_log(self.logdir, self.time, self.mode)
             self.print = logging.info
         else:
             self.print = print
@@ -126,18 +125,14 @@ class Trainer(object):
         self.print("Log dir: {}".format(self.logdir))
         # Calculate total step
         self.n_train = len(self.trainset)
-        self.steps_per_epoch = np.ceil(
-            self.n_train / self.batch_size).astype(np.int32)
+        self.steps_per_epoch = np.ceil(self.n_train / self.batch_size).astype(np.int32)
         self.verbose = min(self.verbose, self.steps_per_epoch)
         self.n_steps = self.max_epochs * self.steps_per_epoch
+        self.print("{0:<22s} : {1:} ".format('trainset sample', self.n_train))
         # calculate model parameters memory
         para = sum([np.prod(list(p.size())) for p in self.net.parameters()])
-        memory = para * 4 / 1000 / 1000
-        self.print('Model {} : params: {:4f}M'.format(self.net._get_name(), memory))
-        self.print('###### Experiment Parameters ######')
-        for k, v in self.params.items():
-            self.print('{0:<22s} : {1:}'.format(k, v))
-        self.print("{0:<22s} : {1:} ".format('trainset sample', self.n_train))
+        memory = para * 4 / (1024**2)
+        self.print('Model {} : params: {:,}, Memory {:.3f}MB'.format(self.net._get_name(), para, memory))
         # GO!!!!!!!!!
         start_time = time.time()
         self.train_total_time = 0
@@ -152,39 +147,44 @@ class Trainer(object):
             if self.eval_freq and epoch % self.eval_freq == 0:
                 acc = self.eval(epoch)
                 torch.cuda.empty_cache()
-        self.print("Finished training! Best epoch {} best acc {}".format(self.best_epoch, self.best_acc))
+        self.print("Finished training! Best epoch {} best acc {:.4f}".format(self.best_epoch, self.best_acc))
         self.print("Spend time: {:.2f}h".format((time.time() - start_time) / 3600))
+        net_type = type(self.net).__name__
+        best_pkl = os.path.join(self.logdir, '{}_{:03d}.pkl'.format(net_type, self.best_epoch))
+        modify = os.path.join(self.logdir, 'best.pkl')
+        shutil.copyfile(best_pkl, modify)
+        return
 
     def train_epoch(self, epoch):
         """Train one epoch, you can overload this function according to your need."""
+        torch.backends.cudnn.benchmark = True
         device = torch.device('cuda:0' if self.use_gpu else 'cpu')
         self.net.to(device)
         self.criterion.to(device)
         self.net.train()
         # Iterate over data.
         prefetcher = DataPrefetcher(self.trainloader)
-        image, label = prefetcher.next()
+        data = prefetcher.next()
         step = 0
         while image is not None:
-            image, label = data[0].to(device), data[1].to(device)
+            images, labels = data[0].to(device), data[1].to(device)
             before_op_time = time.time()
             self.optimizer.zero_grad()
-            output = self.net(image)
-            total_loss = self.criterion(output, label)
+            output = self.net(images)
+            total_loss = self.criterion(output, labels)
             total_loss.backward()
             self.optimizer.step()
-            fps = image.shape[0] / (time.time() - before_op_time)
+            fps = images.shape[0] / (time.time() - before_op_time)
             time_sofar = self.train_total_time / 3600
             time_left = (self.n_steps / self.global_step - 1.0) * time_sofar
             if self.verbose > 0 and (step + 1) % (self.steps_per_epoch // self.verbose) == 0:
                 print_str = 'Epoch [{:>3}/{:>3}] | Step [{:>3}/{:>3}] | fps {:4.2f} | Loss: {:7.3f} | Time elapsed {:.2f}h | Time left {:.2f}h'. \
-                    format(epoch, self.max_epochs, step + 1, self.steps_per_epoch,
-                           fps, total_loss, time_sofar, time_left)
+                    format(epoch, self.max_epochs, step + 1, self.steps_per_epoch, fps, total_loss, time_sofar, time_left)
                 self.print(print_str)
             self.global_step += 1
             self.train_total_time += time.time() - before_op_time
-        image, label = prefetcher.next()
-        step += 1
+            data = prefetcher.next()
+            step += 1
         return total_loss
 
     def eval(self, epoch):
@@ -198,8 +198,7 @@ class Trainer(object):
         self.print('The {}th epoch | acc: {:.4f}%'.format(epoch, acc * 100))
         # Save the checkpoint
         if self.logdir:
-            self.save_checkpoint(epoch, acc)
-            self.print('=> Checkpoint was saved successfully!')
+            self.save(epoch, acc)
         else:
             if acc >= self.best_acc:
                 self.best_epoch, self.acc = epoch, acc

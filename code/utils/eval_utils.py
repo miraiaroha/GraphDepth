@@ -24,8 +24,8 @@ def compute_errors(gt, pred):
     ------
     measures : dict
     """
-    safe_log = lambda x: torch.clamp(x, 1e-6, 1e6)
-    safe_log10 = lambda x: torch.clamp(x, 1e-6, 1e6)
+    safe_log = lambda x: torch.log(torch.clamp(x, 1e-6, 1e6))
+    safe_log10 = lambda x: torch.log(torch.clamp(x, 1e-6, 1e6))
     batch_size = pred.shape[0]
     mask = gt > 0
     gt = gt[mask]
