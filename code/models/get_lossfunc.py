@@ -6,7 +6,7 @@ from .losses import OrdinalRegression2d, CrossEntropy2d, OhemCrossEntropy2d, Att
 import json
 
 def create_lossfunc(args, net):
-    ignore_index = 0
+    ignore_index = -1
     # if args.dataset == 'kitti':
     #     ignore_index = 0
 

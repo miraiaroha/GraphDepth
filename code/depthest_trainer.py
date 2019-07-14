@@ -224,7 +224,7 @@ class DepthEstimationTrainer(Trainer):
                 images, labels = data[0].to(device), data[1].to(device)
                 before_op_time = time.time()
                 if self.params.use_ms: 
-                    depths = predict_multi_scale(self.net, images, ([0.75, 1, 1.25]), 
+                    depths = predict_multi_scale(self.net, images, ([1, 1.25]), 
                         self.params.classes, self.params.use_flip)
                 else:
                     depths = predict_multi_scale(self.net, images, [1], 

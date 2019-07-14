@@ -133,9 +133,8 @@ class _BaseEntropyLoss2d(nn.Module):
             self.ignore_index = c + 1
 
         entropy = self.get_entropy(pred, label)
-
-        mask = label != self.ignore_index
         weighted_entropy = entropy * self.weight
+        mask = label != self.ignore_index
 
         if self.reduction == 'sum':
             loss = torch.sum(weighted_entropy, -1)[mask].mean()

@@ -15,9 +15,9 @@ from .sadecoder import SADecoder
 from .gcdecoder import GCDecoder
 
 def continuous2discrete(depth, d_min, d_max, n_c):
-    mask = 1 - (depth > d_min) * (depth < d_max)
+    mask = 1 - (depth >= d_min) * (depth <= d_max)
     depth = torch.round(torch.log(depth / d_min) / np.log(d_max / d_min) * (n_c - 1))
-    depth[mask] = 0
+    depth[mask] = -1
     return depth
 
 def discrete2continuous(depth, d_min, d_max, n_c):
@@ -38,8 +38,9 @@ class BaseClassificationModel_(nn.Module):
     def decode_ord(self, y):
         batch_size, prob, height, width = y.shape
         y = torch.reshape(y, (batch_size, prob//2, 2, height, width))
-        denominator = torch.sum(torch.exp(y), 2)
-        pred_score = torch.div(torch.exp(y[:, :, 1, :, :]), denominator)
+        y_mean = y.mean(2, keepdim=True)
+        denominator = torch.sum(torch.exp(y - y_mean), 2)
+        pred_score = torch.div(torch.exp(y[:, :, 1, :, :] - y_mean.squeeze(2)), denominator)
         return pred_score
 
     def hard_cross_entropy(self, pred_score, d_min, d_max, n_c):

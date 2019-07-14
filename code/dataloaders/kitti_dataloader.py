@@ -13,8 +13,8 @@ from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 
 iheight, iwidth = 375, 1242 # raw image size
-r_size = (176, 608)
 c_size = (None, None, 352, 1216)
+r_size = (176, 608)
 
 def make_dataset(root, txt):
     with open(txt, 'r') as f:
